@@ -62,7 +62,7 @@ let ORDER_BOOKS = [
     size: [1, 5],
     order1: 11,
     order2: 16,
-    api: "https://api.binance.com/api/v3/depth?symbol=ETHBUSD&limit=100",
+    api: "https://api.binance.us/api/v3/depth?symbol=ETHBUSD&limit=100",
   },
   {
     token0: {
@@ -80,7 +80,7 @@ let ORDER_BOOKS = [
     size: [1, 2],
     order1: 11,
     order2: 16,
-    api: "https://api.binance.com/api/v3/depth?symbol=BTCBUSD&limit=100",
+    api: "https://api.binance.us/api/v3/depth?symbol=BTCBUSD&limit=100",
   },
   {
     token0: {
@@ -98,7 +98,7 @@ let ORDER_BOOKS = [
     size: [100, 2000],
     order1: 11,
     order2: 16,
-    api: "https://api.binance.com/api/v3/depth?symbol=LINKBUSD&limit=100",
+    api: "https://api.binance.us/api/v3/depth?symbol=LINKUSDT&limit=100",
   },
   {
     token0: {
@@ -116,7 +116,7 @@ let ORDER_BOOKS = [
     size: [100, 2000],
     order1: 11,
     order2: 16,
-    api: "https://api.binance.com/api/v3/depth?symbol=UNIBUSD&limit=100",
+    api: "https://api.binance.us/api/v3/depth?symbol=UNIUSDT&limit=100",
   },
 ];
 
