@@ -45,15 +45,6 @@ contract OrderBook is IOrderBook {
         bool isAsk
     );
 
-    /// @notice Emitted whenever a limit order is updated
-    event LimitOrderUpdated(
-        uint32 indexed id,
-        address indexed owner,
-        uint256 newAmount0,
-        uint256 newAmount1,
-        bool isAsk
-    );
-
     /// @notice Emitted whenever a limit order is canceled
     event LimitOrderCanceled(
         uint32 indexed id,
