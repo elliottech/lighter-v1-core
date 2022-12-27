@@ -583,7 +583,7 @@ contract OrderBook is IOrderBook {
         uint256[] memory amount1s = new uint256[](asks.length + bids.length);
         bool[] memory isAsks = new bool[](asks.length + bids.length);
 
-        for (uint32 i; i < asks.length; i++) {
+        for (uint32 i = 0; i < asks.length; i++) {
             ids[i] = asks[i].id;
             owners[i] = asks[i].owner;
             amount0s[i] = asks[i].amount0;
@@ -591,7 +591,7 @@ contract OrderBook is IOrderBook {
             isAsks[i] = true;
         }
 
-        for (uint32 i; i < bids.length; i++) {
+        for (uint32 i = 0; i < bids.length; i++) {
             ids[asks.length + i] = bids[i].id;
             owners[asks.length + i] = bids[i].owner;
             amount0s[asks.length + i] = bids[i].amount0;

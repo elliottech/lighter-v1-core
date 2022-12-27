@@ -2,6 +2,7 @@
 pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/IOrderBook.sol";
 import "./interfaces/IBalanceChangeCallback.sol";
@@ -14,6 +15,7 @@ import "./library/FullMath.sol";
 /// token pair or the orderBookId of the order book to interact with, and the
 /// router will interact with the contract address for that order book
 contract Router is IBalanceChangeCallback {
+    using SafeERC20 for IERC20Metadata;
     IFactory public immutable factory;
 
     constructor(address factoryAddress) {
@@ -244,7 +246,7 @@ contract Router is IBalanceChangeCallback {
             msg.sender == address(getOrderBookFromId(orderBookId)),
             "Caller does not match order book"
         );
-        tokenToTransfer.transfer(to, amount);
+        tokenToTransfer.safeTransfer(to, amount);
     }
 
     /// @inheritdoc IBalanceChangeCallback
@@ -263,7 +265,7 @@ contract Router is IBalanceChangeCallback {
             amount <= balance,
             "Insufficient funds associated with sender's address"
         );
-        tokenToTransferFrom.transferFrom(from, address(this), amount);
+        tokenToTransferFrom.safeTransferFrom(from, address(this), amount);
     }
 
     /// @notice Get the order details of all limit orders in the order book.
@@ -275,9 +277,7 @@ contract Router is IBalanceChangeCallback {
     /// @return amount0 The amount of token0 remaining in the orders
     /// @return amount1 The amount of token1 remaining in the orders
     /// @return isAsk Whether each order is an ask order
-    function getLimitOrders(
-        uint8 orderBookId
-    )
+    function getLimitOrders(uint8 orderBookId)
         external
         view
         returns (
