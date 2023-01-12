@@ -124,7 +124,7 @@ contract Router is IBalanceChangeCallback {
         bool isCanceled;
         bool isAsk;
         for (uint256 i = 0; i < size; i++) {
-            if (orderBook.isOrderActive(orderId[i]) == false) {
+            if (!orderBook.isOrderActive(orderId[i])) {
                 newOrderId[i] = 0;
                 continue;
             }
@@ -132,7 +132,7 @@ contract Router is IBalanceChangeCallback {
             isCanceled = orderBook.cancelLimitOrder(orderId[i], msg.sender);
 
             // Shouldn't happen since function checks if the order is active above
-            require(isCanceled == true, "Could not cancel the order");
+            require(isCanceled, "Could not cancel the order");
 
             newOrderId[i] = orderBook.createLimitOrder(
                 newAmount0Base[i],
@@ -164,14 +164,14 @@ contract Router is IBalanceChangeCallback {
     ) public returns (uint32 newOrderId) {
         IOrderBook orderBook = getOrderBookFromId(orderBookId);
 
-        if (orderBook.isOrderActive(orderId) == false) {
+        if (!orderBook.isOrderActive(orderId)) {
             newOrderId = 0;
         } else {
             bool isAsk = orderBook.isAskOrder(orderId);
             bool isCanceled = orderBook.cancelLimitOrder(orderId, msg.sender);
 
             // Shouldn't happen since function checks if the order is active above
-            require(isCanceled == true, "Could not cancel the order");
+            require(isCanceled, "Could not cancel the order");
             newOrderId = orderBook.createLimitOrder(
                 newAmount0Base,
                 newPriceBase,
@@ -246,7 +246,13 @@ contract Router is IBalanceChangeCallback {
             msg.sender == address(getOrderBookFromId(orderBookId)),
             "Caller does not match order book"
         );
+        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(address(this)); 
         tokenToTransfer.safeTransfer(to, amount);
+        uint256 contractBalanceAfter = tokenToTransfer.balanceOf(address(this));
+        require(
+            contractBalanceAfter + amount == contractBalanceBefore,
+            "Contract balance change does not match the sent amount"
+        );
     }
 
     /// @inheritdoc IBalanceChangeCallback
@@ -265,7 +271,13 @@ contract Router is IBalanceChangeCallback {
             amount <= balance,
             "Insufficient funds associated with sender's address"
         );
+        uint256 contractBalanceBefore = tokenToTransferFrom.balanceOf(address(this)); 
         tokenToTransferFrom.safeTransferFrom(from, address(this), amount);
+        uint256 contractBalanceAfter = tokenToTransferFrom.balanceOf(address(this));
+        require(
+            contractBalanceAfter == contractBalanceBefore + amount,
+            "Contract balance change does not match the received amount"
+        );
     }
 
     /// @notice Get the order details of all limit orders in the order book.
