@@ -2,7 +2,6 @@
 pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import "./interfaces/IOrderBook.sol";
@@ -15,7 +14,6 @@ contract OrderBook is IOrderBook {
     using Counters for Counters.Counter;
     using MinLinkedListLib for MinLinkedList;
     using MaxLinkedListLib for MaxLinkedList;
-    using SafeMath for uint256;
     /// Linked list of ask orders sorted by orders with the lowest prices
     /// coming first
     MinLinkedList ask;
@@ -219,13 +217,13 @@ contract OrderBook is IOrderBook {
                     swapAmount0,
                     orderBookId
                 );
-                filledAmount0 = filledAmount0.add(swapAmount0);
-                filledAmount1 = filledAmount1.add(swapAmount1);
+                filledAmount0 = filledAmount0 + swapAmount0;
+                filledAmount1 = filledAmount1 + swapAmount1;
 
-                order.amount1 = order.amount1.sub(
+                order.amount1 = order.amount1 - (
                     FullMath.mulDiv(order.amount1, swapAmount0, order.amount0)
                 );
-                order.amount0 = order.amount0.sub(swapAmount0);
+                order.amount0 = order.amount0 - swapAmount0;
 
                 if (bestBid.amount0 == swapAmount0) {
                     // Remove the best bid from the order book if it is fully
@@ -235,8 +233,8 @@ contract OrderBook is IOrderBook {
                     delete bid.idToLimitOrder[bestBid.id];
                 } else {
                     // Update the best bid if it is partially filled
-                    bestBid.amount0 = bestBid.amount0.sub(swapAmount0);
-                    bestBid.amount1 = bestBid.amount1.sub(swapAmount1);
+                    bestBid.amount0 = bestBid.amount0 - swapAmount0;
+                    bestBid.amount1 = bestBid.amount1 - swapAmount1;
                     break;
                 }
 
@@ -293,13 +291,13 @@ contract OrderBook is IOrderBook {
                     swapAmount1,
                     orderBookId
                 );
-                filledAmount0 = filledAmount0.add(swapAmount0);
-                filledAmount1 = filledAmount1.add(swapAmount1);
+                filledAmount0 = filledAmount0 + swapAmount0;
+                filledAmount1 = filledAmount1 + swapAmount1;
 
-                order.amount1 = order.amount1.sub(
+                order.amount1 = order.amount1 - (
                     FullMath.mulDiv(order.amount1, swapAmount0, order.amount0)
                 );
-                order.amount0 = order.amount0.sub(swapAmount0);
+                order.amount0 = order.amount0 - swapAmount0;
 
                 if (bestAsk.amount0 == swapAmount0) {
                     // Remove the best ask from the order book if it is fully
@@ -309,8 +307,8 @@ contract OrderBook is IOrderBook {
                     delete ask.idToLimitOrder[bestAsk.id];
                 } else {
                     // Update the best ask if it is partially filled
-                    bestAsk.amount0 = bestAsk.amount0.sub(swapAmount0);
-                    bestAsk.amount1 = bestAsk.amount1.sub(swapAmount1);
+                    bestAsk.amount0 = bestAsk.amount0 - swapAmount0;
+                    bestAsk.amount1 = bestAsk.amount1 - swapAmount1;
                     break;
                 }
 
@@ -326,9 +324,7 @@ contract OrderBook is IOrderBook {
             // and filledAmount1 will be the amount of sold quoteToken
             // Initially user pays filledAmount0 * price amount of quoteToken
             // Since the matching happens on maker price, we need to refund the quoteToken amount that is not used in matching
-            uint256 refundAmount1 = firstAmount1.sub(order.amount1).sub(
-                filledAmount1
-            );
+            uint256 refundAmount1 = firstAmount1 - order.amount1 - filledAmount1;
 
             if (refundAmount1 > 0) {
                 balanceChangeCallback.addBalanceCallback(
@@ -361,10 +357,8 @@ contract OrderBook is IOrderBook {
         require(hintId < _orderIdCounter.current(), "Invalid hint id");
         require(amount0Base > 0, "Invalid size");
         require(priceBase > 0, "Invalid price");
-        uint256 amount0 = uint256(amount0Base).mul(sizeTick);
-        uint256 amount1 = uint256(priceBase).mul(amount0Base).mul(
-            priceMultiplier
-        );
+        uint256 amount0 = uint256(amount0Base) * sizeTick;
+        uint256 amount1 = uint256(priceBase) * amount0Base * priceMultiplier;
         require(
             _orderIdCounter.current() < 1 << 32,
             "New order id exceeds limit"
@@ -457,10 +451,8 @@ contract OrderBook is IOrderBook {
     ) external override onlyRouter {
         require(amount0Base > 0, "Invalid size");
         require(priceBase > 0, "Invalid price");
-        uint256 amount0 = uint256(amount0Base).mul(sizeTick);
-        uint256 amount1 = uint256(priceBase).mul(amount0Base).mul(
-            priceMultiplier
-        );
+        uint256 amount0 = uint256(amount0Base) * sizeTick;
+        uint256 amount1 = uint256(priceBase) * amount0Base * priceMultiplier;
 
         require(
             _orderIdCounter.current() < 1 << 32,

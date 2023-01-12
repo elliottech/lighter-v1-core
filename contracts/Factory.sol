@@ -123,10 +123,12 @@ contract Factory is IFactory {
         uint8 logSizeTick,
         uint8 logPriceTick
     ) external override onlyOwner returns (address orderBookAddress) {
-        require(token0 != token1);
-        require(token0 != address(0));
-        require(token1 != address(0));
-
+        require(
+            token0 != token1,
+            "Can not create order book for the same token pair"
+        );
+        require(token0 != address(0), "Token0 address can not be zero");
+        require(token1 != address(0), "Token1 address can not be zero");
         require(router != address(0), "Router address is not set");
 
         require(
