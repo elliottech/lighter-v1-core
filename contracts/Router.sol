@@ -241,22 +241,55 @@ contract Router is IBalanceChangeCallback {
         address to,
         uint256 amount,
         uint8 orderBookId
+    ) external override returns (bool) {
+        require(
+            msg.sender == address(getOrderBookFromId(orderBookId)),
+            "Caller does not match order book"
+        );
+        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(address(this));
+        bool success = false;
+        try tokenToTransfer.transfer(to, amount) returns (bool ret) {
+            success = ret;
+        } catch {
+            success = false;
+        }
+        uint256 contractBalanceAfter = tokenToTransfer.balanceOf(address(this));
+
+        uint256 sentAmount = 0;
+        if (success) {
+            sentAmount = amount;
+        }
+        require(
+            contractBalanceAfter + amount >= contractBalanceBefore,
+            "Contract balance change does not match the sent amount"
+        );
+        return success;
+    }
+
+    /// @inheritdoc IBalanceChangeCallback
+    function addSafeBalanceCallback(
+        IERC20Metadata tokenToTransfer,
+        address to,
+        uint256 amount,
+        uint8 orderBookId
     ) external override {
         require(
             msg.sender == address(getOrderBookFromId(orderBookId)),
             "Caller does not match order book"
         );
-        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(address(this)); 
+        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(
+            address(this)
+        );
         tokenToTransfer.safeTransfer(to, amount);
         uint256 contractBalanceAfter = tokenToTransfer.balanceOf(address(this));
         require(
-            contractBalanceAfter + amount == contractBalanceBefore,
+            contractBalanceAfter + amount >= contractBalanceBefore,
             "Contract balance change does not match the sent amount"
         );
     }
 
     /// @inheritdoc IBalanceChangeCallback
-    function subtractBalanceCallback(
+    function subtractSafeBalanceCallback(
         IERC20Metadata tokenToTransferFrom,
         address from,
         uint256 amount,
@@ -275,7 +308,7 @@ contract Router is IBalanceChangeCallback {
         tokenToTransferFrom.safeTransferFrom(from, address(this), amount);
         uint256 contractBalanceAfter = tokenToTransferFrom.balanceOf(address(this));
         require(
-            contractBalanceAfter == contractBalanceBefore + amount,
+            contractBalanceAfter >= contractBalanceBefore + amount,
             "Contract balance change does not match the received amount"
         );
     }

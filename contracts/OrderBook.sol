@@ -33,6 +33,8 @@ contract OrderBook is IOrderBook {
     uint128 public immutable sizeTick;
     uint128 public immutable priceTick;
     uint128 public immutable priceMultiplier;
+    mapping(address => uint256) public claimableBaseToken;
+    mapping(address => uint256) public claimableQuoteToken;
 
     /// @notice Emitted whenever a limit order is created
     event LimitOrderCreated(
@@ -181,7 +183,7 @@ contract OrderBook is IOrderBook {
         uint32 index;
 
         if (isAsk) {
-            balanceChangeCallback.subtractBalanceCallback(
+            balanceChangeCallback.subtractSafeBalanceCallback(
                 token0,
                 from,
                 order.amount0,
@@ -211,12 +213,16 @@ contract OrderBook is IOrderBook {
                     bestBid.owner
                 );
 
-                balanceChangeCallback.addBalanceCallback(
+                bool success = balanceChangeCallback.addBalanceCallback(
                     token0,
                     bestBid.owner,
                     swapAmount0,
                     orderBookId
                 );
+                if (!success) {
+                    claimableBaseToken[bestBid.owner] += swapAmount0;
+                    // emit event
+                }
                 filledAmount0 = filledAmount0 + swapAmount0;
                 filledAmount1 = filledAmount1 + swapAmount1;
 
@@ -246,7 +252,7 @@ contract OrderBook is IOrderBook {
             }
 
             if (filledAmount1 > 0) {
-                balanceChangeCallback.addBalanceCallback(
+                balanceChangeCallback.addSafeBalanceCallback(
                     token1,
                     from,
                     filledAmount1,
@@ -255,7 +261,7 @@ contract OrderBook is IOrderBook {
             }
         } else {
             uint256 firstAmount1 = order.amount1;
-            balanceChangeCallback.subtractBalanceCallback(
+            balanceChangeCallback.subtractSafeBalanceCallback(
                 token1,
                 from,
                 order.amount1,
@@ -285,12 +291,17 @@ contract OrderBook is IOrderBook {
                     from
                 );
 
-                balanceChangeCallback.addBalanceCallback(
+                // Sending tokens to the maker account
+                bool success = balanceChangeCallback.addBalanceCallback(
                     token1,
                     bestAsk.owner,
                     swapAmount1,
                     orderBookId
                 );
+                if (!success) {
+                    claimableQuoteToken[bestAsk.owner] += swapAmount1;
+                    // emit event
+                }
                 filledAmount0 = filledAmount0 + swapAmount0;
                 filledAmount1 = filledAmount1 + swapAmount1;
 
@@ -327,7 +338,7 @@ contract OrderBook is IOrderBook {
             uint256 refundAmount1 = firstAmount1 - order.amount1 - filledAmount1;
 
             if (refundAmount1 > 0) {
-                balanceChangeCallback.addBalanceCallback(
+                balanceChangeCallback.addSafeBalanceCallback(
                     token1,
                     from,
                     refundAmount1,
@@ -336,7 +347,7 @@ contract OrderBook is IOrderBook {
             }
 
             if (filledAmount0 > 0) {
-                balanceChangeCallback.addBalanceCallback(
+                balanceChangeCallback.addSafeBalanceCallback(
                     token0,
                     from,
                     filledAmount0,
@@ -414,7 +425,7 @@ contract OrderBook is IOrderBook {
                 order.owner == from,
                 "The caller should be the owner of the order"
             );
-            balanceChangeCallback.addBalanceCallback(
+            balanceChangeCallback.addSafeBalanceCallback(
                 token0,
                 from,
                 ask.idToLimitOrder[id].amount0,
@@ -428,7 +439,7 @@ contract OrderBook is IOrderBook {
                 order.owner == from,
                 "The caller should be the owner of the order"
             );
-            balanceChangeCallback.addBalanceCallback(
+            balanceChangeCallback.addSafeBalanceCallback(
                 token1,
                 from,
                 bid.idToLimitOrder[id].amount1,
@@ -480,19 +491,55 @@ contract OrderBook is IOrderBook {
 
         // If the order is not fully filled, refund the remaining deposited amount
         if (isAsk) {
-            balanceChangeCallback.addBalanceCallback(
+            balanceChangeCallback.addSafeBalanceCallback(
                 token0,
                 from,
                 newOrder.amount0,
                 orderBookId
             );
         } else {
-            balanceChangeCallback.addBalanceCallback(
+            balanceChangeCallback.addSafeBalanceCallback(
                 token1,
                 from,
                 newOrder.amount1,
                 orderBookId
             );
+        }
+    }
+
+    /// @inheritdoc IOrderBook
+    function claimaBaseToken(address owner) external override onlyRouter {
+        uint256 amount = claimableBaseToken[owner];
+        if (amount > 0) {
+            balanceChangeCallback.addSafeBalanceCallback(
+                token0,
+                owner,
+                amount,
+                orderBookId
+            );
+            claimableBaseToken[owner] = 0;
+            // emit event
+        }
+        else {
+            revert("No claimable base token");
+        }
+    }
+
+    // @inheritdoc IOrderBook
+    function claimQuoteToken(address owner) external override onlyRouter {
+        uint256 amount = claimableQuoteToken[owner];
+        if (amount > 0) {
+            balanceChangeCallback.addSafeBalanceCallback(
+                token1,
+                owner,
+                amount,
+                orderBookId
+            );
+            claimableQuoteToken[owner] = 0;
+            // emit event
+        }
+        else {
+            revert("No claimable quote token");
         }
     }
 

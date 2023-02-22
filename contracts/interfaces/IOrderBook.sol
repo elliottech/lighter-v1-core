@@ -60,6 +60,16 @@ interface IOrderBook {
         address from
     ) external;
 
+    /// @notice Sends the matched base token from the order book to the owner. Only needs
+    /// to be used if owners maker order gets matched but fails to receive the tokens
+    /// @param owner The address of the owner of the claimable base token
+    function claimaBaseToken(address owner) external;
+
+    /// @notice Sends the matched quote token from the order book to the owner. Only needs
+    /// to be used if owners maker order gets matched but fails to receive the tokens
+    /// @param owner The address of the owner of the claimable quote token
+    function claimQuoteToken(address owner) external;
+
     /// @notice Get the order details of all limit orders in the order book.
     /// Each returned list contains the details of ask orders first, followed
     /// by bid orders
@@ -136,4 +146,12 @@ interface IOrderBook {
     /// @notice The priceMultiplier of the order book
     /// @return priceMultiplier The priceMultiplier of the order book
     function priceMultiplier() external view returns (uint128);
+
+    /// @notice Claimable base token amount for given address
+    /// @return claimableBaseToken Claimable base token amount for given address
+    function claimableBaseToken(address owner) external view returns (uint256);
+
+    /// @notice Claimable quote token amount for given address
+    /// @return claimableBaseToken Claimable quote token amount for given address
+    function claimableQuoteToken(address owner) external view returns (uint256);
 }
