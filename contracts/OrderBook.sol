@@ -3,6 +3,7 @@ pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/IOrderBook.sol";
 import "./interfaces/IBalanceChangeCallback.sol";
@@ -14,6 +15,7 @@ contract OrderBook is IOrderBook {
     using Counters for Counters.Counter;
     using MinLinkedListLib for MinLinkedList;
     using MaxLinkedListLib for MaxLinkedList;
+    using SafeERC20 for IERC20Metadata;
     /// Linked list of ask orders sorted by orders with the lowest prices
     /// coming first
     MinLinkedList ask;
@@ -98,6 +100,56 @@ contract OrderBook is IOrderBook {
     modifier onlyRouter() {
         checkIsRouter();
         _;
+    }
+
+    /// @notice Transfer tokens from the order book to the user
+    /// @param tokenToTransfer The token to transfer
+    /// @param to The user to transfer to
+    /// @param amount The amount to transfer
+    /// @return success Whether the transfer was successful
+    function sendToken(
+        IERC20Metadata tokenToTransfer,
+        address to,
+        uint256 amount
+    ) internal returns (bool) {
+        uint256 orderBookBalanceBefore = tokenToTransfer.balanceOf(address(this));
+        bool success = false;
+        try tokenToTransfer.transfer(to, amount) returns (bool ret) {
+            success = ret;
+        } catch {
+            success = false;
+        }
+        uint256 orderBookBalanceAfter = tokenToTransfer.balanceOf(address(this));
+
+        uint256 sentAmount = 0;
+        if (success) {
+            sentAmount = amount;
+        }
+        require(
+            orderBookBalanceAfter + sentAmount >= orderBookBalanceBefore,
+            "Contract balance change does not match the sent amount"
+        );
+        return success;
+    }
+
+    /// @notice Transfer tokens from the order book to the user
+    /// @param tokenToTransfer The token to transfer
+    /// @param to The user to transfer to
+    /// @param amount The amount to transfer
+    function sendTokenSafe(
+        IERC20Metadata tokenToTransfer,
+        address to,
+        uint256 amount
+    ) internal {
+        uint256 orderBookBalanceBefore = tokenToTransfer.balanceOf(
+            address(this)
+        );
+        tokenToTransfer.safeTransfer(to, amount);
+        uint256 orderBookBalanceAfter = tokenToTransfer.balanceOf(address(this));
+        require(
+            orderBookBalanceAfter + amount >= orderBookBalanceBefore,
+            "Contract balance change does not match the sent amount"
+        );
     }
 
     constructor(
@@ -227,12 +279,7 @@ contract OrderBook is IOrderBook {
                     bestBid.owner
                 );
 
-                bool success = balanceChangeCallback.addBalanceCallback(
-                    token0,
-                    bestBid.owner,
-                    swapAmount0,
-                    orderBookId
-                );
+                bool success = sendToken(token0, bestBid.owner, swapAmount0);
                 if (!success) {
                     claimableBaseToken[bestBid.owner] += swapAmount0;
                     emit ClaimableBalanceChanged(
@@ -271,12 +318,7 @@ contract OrderBook is IOrderBook {
             }
 
             if (filledAmount1 > 0) {
-                balanceChangeCallback.addSafeBalanceCallback(
-                    token1,
-                    from,
-                    filledAmount1,
-                    orderBookId
-                );
+                sendTokenSafe(token1, from, filledAmount1);
             }
         } else {
             uint256 firstAmount1 = order.amount1;
@@ -311,12 +353,7 @@ contract OrderBook is IOrderBook {
                 );
 
                 // Sending tokens to the maker account
-                bool success = balanceChangeCallback.addBalanceCallback(
-                    token1,
-                    bestAsk.owner,
-                    swapAmount1,
-                    orderBookId
-                );
+                bool success = sendToken(token1, bestAsk.owner, swapAmount1);
                 if (!success) {
                     claimableQuoteToken[bestAsk.owner] += swapAmount1;
                     emit ClaimableBalanceChanged(
@@ -362,21 +399,11 @@ contract OrderBook is IOrderBook {
             uint256 refundAmount1 = firstAmount1 - order.amount1 - filledAmount1;
 
             if (refundAmount1 > 0) {
-                balanceChangeCallback.addSafeBalanceCallback(
-                    token1,
-                    from,
-                    refundAmount1,
-                    orderBookId
-                );
+                sendTokenSafe(token1, from, refundAmount1);
             }
 
             if (filledAmount0 > 0) {
-                balanceChangeCallback.addSafeBalanceCallback(
-                    token0,
-                    from,
-                    filledAmount0,
-                    orderBookId
-                );
+                sendTokenSafe(token0, from, filledAmount0);
             }
         }
     }
@@ -449,12 +476,7 @@ contract OrderBook is IOrderBook {
                 order.owner == from,
                 "The caller should be the owner of the order"
             );
-            bool success = balanceChangeCallback.addBalanceCallback(
-                token0,
-                from,
-                order.amount0,
-                orderBookId
-            );
+            bool success = sendToken(token0, from, order.amount0);
             if (!success) {
                 claimableBaseToken[order.owner] += order.amount0;
                 emit ClaimableBalanceChanged(
@@ -472,12 +494,7 @@ contract OrderBook is IOrderBook {
                 order.owner == from,
                 "The caller should be the owner of the order"
             );
-            bool success = balanceChangeCallback.addBalanceCallback(
-                token1,
-                from,
-                order.amount1,
-                orderBookId
-            );
+            bool success = sendToken(token1, from, order.amount1);
             if (!success) {
                 claimableQuoteToken[order.owner] += order.amount1;
                 emit ClaimableBalanceChanged(
@@ -533,19 +550,9 @@ contract OrderBook is IOrderBook {
 
         // If the order is not fully filled, refund the remaining deposited amount
         if (isAsk) {
-            balanceChangeCallback.addSafeBalanceCallback(
-                token0,
-                from,
-                newOrder.amount0,
-                orderBookId
-            );
+            sendTokenSafe(token0, from, newOrder.amount0);
         } else {
-            balanceChangeCallback.addSafeBalanceCallback(
-                token1,
-                from,
-                newOrder.amount1,
-                orderBookId
-            );
+            sendTokenSafe(token1, from, newOrder.amount1);
         }
     }
 
@@ -553,12 +560,7 @@ contract OrderBook is IOrderBook {
     function claimBaseToken(address owner) external override onlyRouter {
         uint256 amount = claimableBaseToken[owner];
         if (amount > 0) {
-            balanceChangeCallback.addSafeBalanceCallback(
-                token0,
-                owner,
-                amount,
-                orderBookId
-            );
+            sendTokenSafe(token0, owner, amount);
             claimableBaseToken[owner] = 0;
             emit Claimed(owner, amount, true);
         } else {
@@ -570,12 +572,7 @@ contract OrderBook is IOrderBook {
     function claimQuoteToken(address owner) external override onlyRouter {
         uint256 amount = claimableQuoteToken[owner];
         if (amount > 0) {
-            balanceChangeCallback.addSafeBalanceCallback(
-                token1,
-                owner,
-                amount,
-                orderBookId
-            );
+            sendTokenSafe(token1, owner, amount);
             claimableQuoteToken[owner] = 0;
             emit Claimed(owner, amount, false);
         } else {
