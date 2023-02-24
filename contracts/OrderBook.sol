@@ -74,6 +74,20 @@ contract OrderBook is IOrderBook {
         address bidOwner
     );
 
+    /// @notice Emitted whenever a token transfer from the order book to a maker
+    /// fails and the amount that was supposed to be transferred is added to the
+    /// claimable amount for the maker. This can happen if the maker is blacklisted
+    event ClaimableBalanceChanged(
+        address indexed owner,
+        uint256 amountDelta,
+        uint256 newAmount,
+        bool isBaseToken
+    );
+
+    /// @notice Emitted whenever a maker claims tokens from the order book.
+    /// This can happen if the maker was blacklisted and no longer is
+    event Claimed(address indexed owner, uint256 amount, bool isBaseToken);
+
     function checkIsRouter() private view {
         require(
             msg.sender == routerAddress,
@@ -221,14 +235,25 @@ contract OrderBook is IOrderBook {
                 );
                 if (!success) {
                     claimableBaseToken[bestBid.owner] += swapAmount0;
-                    // emit event
+                    emit ClaimableBalanceChanged(
+                        bestBid.owner,
+                        swapAmount0,
+                        claimableBaseToken[bestBid.owner],
+                        true
+                    );
                 }
                 filledAmount0 = filledAmount0 + swapAmount0;
                 filledAmount1 = filledAmount1 + swapAmount1;
 
-                order.amount1 = order.amount1 - (
-                    FullMath.mulDiv(order.amount1, swapAmount0, order.amount0)
-                );
+                order.amount1 =
+                    order.amount1 -
+                    (
+                        FullMath.mulDiv(
+                            order.amount1,
+                            swapAmount0,
+                            order.amount0
+                        )
+                    );
                 order.amount0 = order.amount0 - swapAmount0;
 
                 if (bestBid.amount0 == swapAmount0) {
@@ -300,14 +325,25 @@ contract OrderBook is IOrderBook {
                 );
                 if (!success) {
                     claimableQuoteToken[bestAsk.owner] += swapAmount1;
-                    // emit event
+                    emit ClaimableBalanceChanged(
+                        bestAsk.owner,
+                        swapAmount1,
+                        claimableQuoteToken[bestAsk.owner],
+                        false
+                    );
                 }
                 filledAmount0 = filledAmount0 + swapAmount0;
                 filledAmount1 = filledAmount1 + swapAmount1;
 
-                order.amount1 = order.amount1 - (
-                    FullMath.mulDiv(order.amount1, swapAmount0, order.amount0)
-                );
+                order.amount1 =
+                    order.amount1 -
+                    (
+                        FullMath.mulDiv(
+                            order.amount1,
+                            swapAmount0,
+                            order.amount0
+                        )
+                    );
                 order.amount0 = order.amount0 - swapAmount0;
 
                 if (bestAsk.amount0 == swapAmount0) {
@@ -335,7 +371,9 @@ contract OrderBook is IOrderBook {
             // and filledAmount1 will be the amount of sold quoteToken
             // Initially user pays filledAmount0 * price amount of quoteToken
             // Since the matching happens on maker price, we need to refund the quoteToken amount that is not used in matching
-            uint256 refundAmount1 = firstAmount1 - order.amount1 - filledAmount1;
+            uint256 refundAmount1 = firstAmount1 -
+                order.amount1 -
+                filledAmount1;
 
             if (refundAmount1 > 0) {
                 balanceChangeCallback.addSafeBalanceCallback(
@@ -425,12 +463,21 @@ contract OrderBook is IOrderBook {
                 order.owner == from,
                 "The caller should be the owner of the order"
             );
-            balanceChangeCallback.addSafeBalanceCallback(
+            bool success = balanceChangeCallback.addBalanceCallback(
                 token0,
                 from,
-                ask.idToLimitOrder[id].amount0,
+                order.amount0,
                 orderBookId
             );
+            if (!success) {
+                claimableBaseToken[order.owner] += order.amount0;
+                emit ClaimableBalanceChanged(
+                    order.owner,
+                    order.amount0,
+                    claimableBaseToken[order.owner],
+                    true
+                );
+            }
             ask.erase(id);
             delete ask.idToLimitOrder[id];
         } else {
@@ -439,12 +486,21 @@ contract OrderBook is IOrderBook {
                 order.owner == from,
                 "The caller should be the owner of the order"
             );
-            balanceChangeCallback.addSafeBalanceCallback(
+            bool success = balanceChangeCallback.addBalanceCallback(
                 token1,
                 from,
-                bid.idToLimitOrder[id].amount1,
+                order.amount1,
                 orderBookId
             );
+            if (!success) {
+                claimableQuoteToken[order.owner] += order.amount1;
+                emit ClaimableBalanceChanged(
+                    order.owner,
+                    order.amount1,
+                    claimableQuoteToken[order.owner],
+                    false
+                );
+            }
             bid.erase(id);
             delete bid.idToLimitOrder[id];
         }
@@ -508,7 +564,7 @@ contract OrderBook is IOrderBook {
     }
 
     /// @inheritdoc IOrderBook
-    function claimaBaseToken(address owner) external override onlyRouter {
+    function claimBaseToken(address owner) external override onlyRouter {
         uint256 amount = claimableBaseToken[owner];
         if (amount > 0) {
             balanceChangeCallback.addSafeBalanceCallback(
@@ -518,9 +574,8 @@ contract OrderBook is IOrderBook {
                 orderBookId
             );
             claimableBaseToken[owner] = 0;
-            // emit event
-        }
-        else {
+            emit Claimed(owner, amount, true);
+        } else {
             revert("No claimable base token");
         }
     }
@@ -536,9 +591,8 @@ contract OrderBook is IOrderBook {
                 orderBookId
             );
             claimableQuoteToken[owner] = 0;
-            // emit event
-        }
-        else {
+            emit Claimed(owner, amount, false);
+        } else {
             revert("No claimable quote token");
         }
     }

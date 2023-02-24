@@ -63,7 +63,7 @@ interface IOrderBook {
     /// @notice Sends the matched base token from the order book to the owner. Only needs
     /// to be used if owners maker order gets matched but fails to receive the tokens
     /// @param owner The address of the owner of the claimable base token
-    function claimaBaseToken(address owner) external;
+    function claimBaseToken(address owner) external;
 
     /// @notice Sends the matched quote token from the order book to the owner. Only needs
     /// to be used if owners maker order gets matched but fails to receive the tokens
