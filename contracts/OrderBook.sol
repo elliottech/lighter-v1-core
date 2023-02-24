@@ -245,15 +245,9 @@ contract OrderBook is IOrderBook {
                 filledAmount0 = filledAmount0 + swapAmount0;
                 filledAmount1 = filledAmount1 + swapAmount1;
 
-                order.amount1 =
-                    order.amount1 -
-                    (
-                        FullMath.mulDiv(
-                            order.amount1,
-                            swapAmount0,
-                            order.amount0
-                        )
-                    );
+                order.amount1 = order.amount1 - (
+                    FullMath.mulDiv(order.amount1, swapAmount0, order.amount0)
+                );
                 order.amount0 = order.amount0 - swapAmount0;
 
                 if (bestBid.amount0 == swapAmount0) {
@@ -335,15 +329,9 @@ contract OrderBook is IOrderBook {
                 filledAmount0 = filledAmount0 + swapAmount0;
                 filledAmount1 = filledAmount1 + swapAmount1;
 
-                order.amount1 =
-                    order.amount1 -
-                    (
-                        FullMath.mulDiv(
-                            order.amount1,
-                            swapAmount0,
-                            order.amount0
-                        )
-                    );
+                order.amount1 = order.amount1 - (
+                    FullMath.mulDiv(order.amount1, swapAmount0, order.amount0)
+                );
                 order.amount0 = order.amount0 - swapAmount0;
 
                 if (bestAsk.amount0 == swapAmount0) {
@@ -371,9 +359,7 @@ contract OrderBook is IOrderBook {
             // and filledAmount1 will be the amount of sold quoteToken
             // Initially user pays filledAmount0 * price amount of quoteToken
             // Since the matching happens on maker price, we need to refund the quoteToken amount that is not used in matching
-            uint256 refundAmount1 = firstAmount1 -
-                order.amount1 -
-                filledAmount1;
+            uint256 refundAmount1 = firstAmount1 - order.amount1 - filledAmount1;
 
             if (refundAmount1 > 0) {
                 balanceChangeCallback.addSafeBalanceCallback(

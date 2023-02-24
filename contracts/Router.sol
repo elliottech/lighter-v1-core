@@ -246,9 +246,7 @@ contract Router is IBalanceChangeCallback {
             msg.sender == address(getOrderBookFromId(orderBookId)),
             "Caller does not match order book"
         );
-        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(
-            address(this)
-        );
+        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(address(this));
         bool success = false;
         try tokenToTransfer.transfer(to, amount) returns (bool ret) {
             success = ret;
@@ -306,13 +304,9 @@ contract Router is IBalanceChangeCallback {
             amount <= balance,
             "Insufficient funds associated with sender's address"
         );
-        uint256 contractBalanceBefore = tokenToTransferFrom.balanceOf(
-            address(this)
-        );
+        uint256 contractBalanceBefore = tokenToTransferFrom.balanceOf(address(this));
         tokenToTransferFrom.safeTransferFrom(from, address(this), amount);
-        uint256 contractBalanceAfter = tokenToTransferFrom.balanceOf(
-            address(this)
-        );
+        uint256 contractBalanceAfter = tokenToTransferFrom.balanceOf(address(this));
         require(
             contractBalanceAfter >= contractBalanceBefore + amount,
             "Contract balance change does not match the received amount"
@@ -328,9 +322,7 @@ contract Router is IBalanceChangeCallback {
     /// @return amount0 The amount of token0 remaining in the orders
     /// @return amount1 The amount of token1 remaining in the orders
     /// @return isAsk Whether each order is an ask order
-    function getLimitOrders(
-        uint8 orderBookId
-    )
+    function getLimitOrders(uint8 orderBookId)
         external
         view
         returns (
