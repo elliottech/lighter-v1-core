@@ -235,28 +235,23 @@ contract Router is IBalanceChangeCallback {
         orderBook.createMarketOrder(amount0Base, priceBase, isAsk, msg.sender);
     }
 
-    /// @inheritdoc IBalanceChangeCallback
-    function addBalanceCallback(
-        IERC20Metadata tokenToTransfer,
-        address to,
-        uint256 amount,
-        uint8 orderBookId
-    ) external override {
-        require(
-            msg.sender == address(getOrderBookFromId(orderBookId)),
-            "Caller does not match order book"
-        );
-        uint256 contractBalanceBefore = tokenToTransfer.balanceOf(address(this)); 
-        tokenToTransfer.safeTransfer(to, amount);
-        uint256 contractBalanceAfter = tokenToTransfer.balanceOf(address(this));
-        require(
-            contractBalanceAfter + amount == contractBalanceBefore,
-            "Contract balance change does not match the sent amount"
-        );
+    /// @notice Claims base tokens from order book
+    /// @param orderBookId The unique identifier of the order book
+    function claimBaseToken(uint8 orderBookId) public {
+        IOrderBook orderBook = getOrderBookFromId(orderBookId);
+        orderBook.claimBaseToken(msg.sender);
     }
 
+    /// @notice Claims quote tokens from order book
+    /// @param orderBookId The unique identifier of the order book
+    function claimQuoteToken(uint8 orderBookId) public {
+        IOrderBook orderBook = getOrderBookFromId(orderBookId);
+        orderBook.claimQuoteToken(msg.sender);
+    }
+
+
     /// @inheritdoc IBalanceChangeCallback
-    function subtractBalanceCallback(
+    function subtractSafeBalanceCallback(
         IERC20Metadata tokenToTransferFrom,
         address from,
         uint256 amount,
@@ -271,12 +266,12 @@ contract Router is IBalanceChangeCallback {
             amount <= balance,
             "Insufficient funds associated with sender's address"
         );
-        uint256 contractBalanceBefore = tokenToTransferFrom.balanceOf(address(this)); 
-        tokenToTransferFrom.safeTransferFrom(from, address(this), amount);
-        uint256 contractBalanceAfter = tokenToTransferFrom.balanceOf(address(this));
+        uint256 orderBookBalanceBefore = tokenToTransferFrom.balanceOf(msg.sender);
+        tokenToTransferFrom.safeTransferFrom(from, msg.sender, amount);
+        uint256 orderBookBalanceAfter = tokenToTransferFrom.balanceOf(msg.sender);
         require(
-            contractBalanceAfter == contractBalanceBefore + amount,
-            "Contract balance change does not match the received amount"
+            orderBookBalanceAfter >= orderBookBalanceBefore + amount,
+            "Order book balance change does not match the received amount"
         );
     }
 
@@ -343,6 +338,30 @@ contract Router is IBalanceChangeCallback {
     ) external view returns (uint32) {
         IOrderBook orderBook = getOrderBookFromId(orderBookId);
         return orderBook.getMockIndexToInsert(amount0, amount1, isAsk);
+    }
+
+    /// @notice Get the amount of base token claimable by the owner for given order book
+    /// @param orderBookId The id of the order book to lookup
+    /// @param owner The address of the user
+    /// @return claimableBaseToken Claimable base token amount for given order book and address
+    function claimableBaseToken(
+        uint8 orderBookId,
+        address owner
+    ) external view returns (uint256) {
+        IOrderBook orderBook = getOrderBookFromId(orderBookId);
+        return orderBook.claimableBaseToken(owner);
+    }
+
+    /// @notice Get the amount of quote token claimable by the owner for given order book
+    /// @param orderBookId The id of the order book to lookup
+    /// @param owner The address of the user
+    /// @return claimableQuoteToken Claimable quote token amount for given order book and address
+    function claimableQuoteToken(
+        uint8 orderBookId,
+        address owner
+    ) external view returns (uint256) {
+        IOrderBook orderBook = getOrderBookFromId(orderBookId);
+        return orderBook.claimableQuoteToken(owner);
     }
 
     /// @dev Get the uint value from msg.data starting from a specific byte
