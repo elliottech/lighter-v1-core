@@ -21,6 +21,13 @@ yarn.lock
 #Hardhat files
 cache
 artifacts
+cache_hardhat
+
+# forge files
+forge_cache
+forge_cache/
+out/
+out
 
 # Logs
 Logs*.log
