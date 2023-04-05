@@ -13,3 +13,6 @@
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 [submodule "lib/openzeppelin-contracts"]
 	branch = v4.8.2
+[submodule "lib/solmate"]
+	path = lib/solmate
+	url = https://github.com/transmissions11/solmate
