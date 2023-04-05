@@ -1,14 +1,47 @@
+# compiled output
 node_modules
+dist
+
+# environment variables
 .env
+
+# Tests
 coverage
 coverage.json
+
+# dependencies
 typechain
 typechain-types
 package-lock.json
 yarn.lock
+
+# local system OS files
 .DS_Store
 
 #Hardhat files
 cache
 artifacts
 
+# Logs
+Logs*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
