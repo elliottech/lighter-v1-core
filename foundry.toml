@@ -1,0 +1,14 @@
+[profile.default]
+src = 'contracts'
+out = 'out'
+test = 'test' # remap test folder temporarily
+libs = ['lib']
+cache_path  = 'forge-cache'
+
+solc_version = '0.8.16'
+optimizer = true
+optimizer_runs = 4294967295
+
+gas_price=40000000000
+
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config
