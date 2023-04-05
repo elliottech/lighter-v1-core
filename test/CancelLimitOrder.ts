@@ -128,7 +128,7 @@ describe("Cancel limit order function", function () {
       ).wait();
     }
 
-    await expect(tryToCancel()).to.be.rejectedWith(
+    await expect(tryToCancel()).to.eventually.be.rejected(
       "The caller should be the owner of the order"
     );
   });

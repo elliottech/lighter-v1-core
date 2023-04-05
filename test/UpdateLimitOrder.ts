@@ -114,7 +114,7 @@ describe("Update limit order function", function () {
 
     // assert updated orders are correct
     expect([3, 4]).to.eql(updated_orders[0]);
-    expect(updated_orders[2][1]).to.equal(700 * sizeTick);
+    expect(updated_orders[2][1].toNumber()).to.equal(700 * sizeTick);
     expect(
       (await token0.balanceOf(acc1.address)).eq(
         startBalance - BigInt(703) * BigInt(sizeTick)
@@ -160,8 +160,8 @@ describe("Update limit order function", function () {
     // Order should be partially filled by ask order 4.
     const partially_filled_order_amount_0 = updated_orders[2][0];
     const partially_filled_order_amount_1 = updated_orders[3][0];
-    expect(partially_filled_order_amount_0).to.equal(1 * sizeTick);
-    expect(partially_filled_order_amount_1).to.equal(3);
+    expect(partially_filled_order_amount_0.toNumber()).to.equal(1 * sizeTick);
+    expect(partially_filled_order_amount_1.toNumber()).to.equal(3);
   });
 
   it("Should not allow updating another user's order", async function () {

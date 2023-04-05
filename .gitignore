@@ -24,8 +24,7 @@ artifacts
 cache_hardhat
 
 # forge files
-forge_cache
-forge_cache/
+forge-cache
 out/
 out
 
