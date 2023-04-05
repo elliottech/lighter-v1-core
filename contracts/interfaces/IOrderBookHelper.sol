@@ -78,4 +78,22 @@ interface IOrderBookHelper {
             uint256 amount0,
             uint256 amount1
         );
+
+    /// @notice Swaps given amount of tokens for the given order book and min amount to receive
+    /// Returned amount is the swapped amount bounded by receiving at least amountOutMin tokens
+    /// @param orderBookId Id of the order book to get the swap data on
+    /// @param amountIn amount to send for the swap.
+    /// @param isInToken0 True if the amountIn is token0, false otherwise
+    /// @param amountOutMin Lower bound for the amount to receive after the swap.
+    /// @return amountOut The amount of token received
+    function swapToken(
+        uint8 orderBookId,
+        uint256 amountIn,
+        bool isInToken0,
+        uint256 amountOutMin,
+    )
+        external
+        returns (
+            uint256 amountOut
+        );
 }
