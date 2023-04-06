@@ -257,18 +257,10 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         bool isAsk,
         address from
     ) public {
-
         OrderMatchFill[] memory orderMatchFills = new OrderMatchFill[](100);
         MatchOrderLocalVars memory matchOrderLocalVars;
 
         if (isAsk) {
-            // balanceChangeCallback.subtractSafeBalanceCallback(
-            //     token0,
-            //     from,
-            //     order.amount0,
-            //     orderBookId
-            // );
-
             bool atLeastOneFullSwap = false;
 
             matchOrderLocalVars.index = bid.getFirstNode();
@@ -291,18 +283,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                     bestBid.id,
                     bestBid.owner
                 );
-
-                // for a sell-order, transfer token-0 amount to matched best-bid owner of orderBook
-                //bool success = sendToken(token0, bestBid.owner, swapAmount0);
-                // if (!success) {
-                //     claimableBaseToken[bestBid.owner] += swapAmount0;
-                //     emit ClaimableBalanceIncrease(
-                //         bestBid.owner,
-                //         swapAmount0,
-                //         claimableBaseToken[bestBid.owner],
-                //         true
-                //     );
-                // }
 
                 matchOrderLocalVars.filledAmount0 = matchOrderLocalVars.filledAmount0 + swapAmount0;
                 matchOrderLocalVars.filledAmount1 = matchOrderLocalVars.filledAmount1 + swapAmount1;
@@ -349,18 +329,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 bid.list[0].next = matchOrderLocalVars.index;
             }
 
-            // if (filledAmount1 > 0) {
-            //     sendTokenSafe(token1, from, filledAmount1);
-            // }
         } else {
-            uint256 firstAmount1 = order.amount1;
-            // balanceChangeCallback.subtractSafeBalanceCallback(
-            //     token1,
-            //     from,
-            //     order.amount1,
-            //     orderBookId
-            // );
-
             bool atLeastOneFullSwap = false;
 
             matchOrderLocalVars.index = ask.getFirstNode();
@@ -383,19 +352,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                     order.id,
                     from
                 );
-
-                // Sending tokens to the maker account
-                // bool success = sendToken(token1, bestAsk.owner, swapAmount1);
-
-                // if (!success) {
-                //     claimableQuoteToken[bestAsk.owner] += swapAmount1;
-                //     emit ClaimableBalanceIncrease(
-                //         bestAsk.owner,
-                //         swapAmount1,
-                //         claimableQuoteToken[bestAsk.owner],
-                //         false
-                //     );
-                // }
 
                 matchOrderLocalVars.filledAmount0 = matchOrderLocalVars.filledAmount0 + swapAmount0;
                 matchOrderLocalVars.filledAmount1 = matchOrderLocalVars.filledAmount1 + swapAmount1;
@@ -441,9 +397,49 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 ask.list[matchOrderLocalVars.index].prev = 0;
                 ask.list[0].next = matchOrderLocalVars.index;
             }
+        }
 
-            if (matchOrderLocalVars.filledAmount0 > 0) {
-                //sendTokenSafe(token0, from, filledAmount0);
+        //execute the order-match fill instructions
+        if(matchOrderLocalVars.orderMatchFillIndex > 0) {
+
+            for(uint ind = 0 ; ind < matchOrderLocalVars.orderMatchFillIndex ; ++ind) {
+
+                OrderMatchFill memory orderMatchFill = orderMatchFills[ind];
+
+                if(orderMatchFill.isAsk) { 
+                    
+                    // for a sell-order, transfer token-0 amount to matched best-bid owner of orderBook
+                    bool success = sendToken(token0, orderMatchFill.maker, orderMatchFill.matchAmount0);
+
+                    if (!success) {
+                        claimableBaseToken[orderMatchFill.maker] += orderMatchFill.matchAmount0;
+                        emit ClaimableBalanceIncrease(
+                            orderMatchFill.maker,
+                            orderMatchFill.matchAmount0,
+                            claimableBaseToken[orderMatchFill.maker],
+                            true
+                        );
+                    }
+
+                    sendTokenSafe(token1, orderMatchFill.taker, orderMatchFill.matchAmount1);
+
+                } else {
+
+                    //Sending tokens to the maker account
+                    bool success = sendToken(token1, orderMatchFill.maker, orderMatchFill.matchAmount1);
+
+                    if (!success) {
+                        claimableQuoteToken[orderMatchFill.maker] += orderMatchFill.matchAmount1;
+                        emit ClaimableBalanceIncrease(
+                            orderMatchFill.maker,
+                            orderMatchFill.matchAmount1,
+                            claimableBaseToken[orderMatchFill.maker],
+                            true
+                        );
+                    }
+
+                    sendTokenSafe(token0, orderMatchFill.maker, orderMatchFill.matchAmount0);
+                }
             }
         }
     }
