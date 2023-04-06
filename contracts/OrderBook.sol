@@ -91,6 +91,21 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
     /// This can happen if the maker was blacklisted and no longer is
     event Claimed(address indexed owner, uint256 amount, bool isBaseToken);
 
+    struct OrderMatchFill {
+        bool isAsk;
+        address taker;
+        address maker;
+        uint256 matchAmount0;
+        uint256 matchAmount1;
+    }
+
+    struct MatchOrderLocalVars {
+        uint32 index;
+        uint256 filledAmount0;
+        uint256 filledAmount1; 
+        uint32 orderMatchFillIndex;
+    }
+
     function checkIsRouter() private view {
         require(
             msg.sender == routerAddress,
@@ -231,6 +246,199 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         _orderIdCounter.increment();
     }
 
+    function matchMarketOrder(
+        LimitOrder memory order,
+        bool isAsk,
+        address from
+    ) public {
+
+        OrderMatchFill[] memory orderMatchFills = new OrderMatchFill[](100);
+        MatchOrderLocalVars memory matchOrderLocalVars;
+
+        if (isAsk) {
+            bool atLeastOneFullSwap = false;
+
+            matchOrderLocalVars.index = bid.getFirstNode();
+            while (matchOrderLocalVars.index != 1 && order.amount0 > 0) {
+                LimitOrder storage bestBid = bid.idToLimitOrder[matchOrderLocalVars.index];
+                (
+                    uint256 swapAmount0,
+                    uint256 swapAmount1
+                ) = getLimitOrderSwapAmounts(order, bestBid, isAsk);
+                // Since the linked list is sorted, if there is no price
+                // overlap on the current order, there will be no price
+                // overlap on the later orders
+                if (swapAmount0 == 0 || swapAmount1 == 0) break;
+
+                emit Swap(
+                    swapAmount0,
+                    swapAmount1,
+                    order.id,
+                    from,
+                    bestBid.id,
+                    bestBid.owner
+                );
+
+                matchOrderLocalVars.filledAmount0 = matchOrderLocalVars.filledAmount0 + swapAmount0;
+                matchOrderLocalVars.filledAmount1 = matchOrderLocalVars.filledAmount1 + swapAmount1;
+
+                OrderMatchFill memory orderMatchFill = OrderMatchFill({
+                    isAsk: true,
+                    taker: from,
+                    maker: bestBid.owner,
+                    matchAmount0: swapAmount0,
+                    matchAmount1: swapAmount1
+                });
+
+                orderMatchFills[matchOrderLocalVars.orderMatchFillIndex] = orderMatchFill;
+                matchOrderLocalVars.orderMatchFillIndex++;
+
+                order.amount1 =
+                    order.amount1 -
+                    (
+                        FullMath.mulDiv(
+                            order.amount1,
+                            swapAmount0,
+                            order.amount0
+                        )
+                    );
+                order.amount0 = order.amount0 - swapAmount0;
+
+                if (bestBid.amount0 == swapAmount0) {
+                    // Remove the best bid from the order book if it is fully
+                    // filled
+                    atLeastOneFullSwap = true;
+                    bid.list[matchOrderLocalVars.index].active = false;
+                    delete bid.idToLimitOrder[bestBid.id];
+                } else {
+                    // Update the best bid if it is partially filled
+                    bestBid.amount0 = bestBid.amount0 - swapAmount0;
+                    bestBid.amount1 = bestBid.amount1 - swapAmount1;
+                    break;
+                }
+
+                matchOrderLocalVars.index = bid.list[matchOrderLocalVars.index].next;
+            }
+            if (atLeastOneFullSwap) {
+                bid.list[matchOrderLocalVars.index].prev = 0;
+                bid.list[0].next = matchOrderLocalVars.index;
+            }
+
+        } else {
+            bool atLeastOneFullSwap = false;
+
+            matchOrderLocalVars.index = ask.getFirstNode();
+            while (matchOrderLocalVars.index != 1 && order.amount1 > 0) {
+                LimitOrder storage bestAsk = ask.idToLimitOrder[matchOrderLocalVars.index];
+                (
+                    uint256 swapAmount0,
+                    uint256 swapAmount1
+                ) = getLimitOrderSwapAmounts(order, bestAsk, isAsk);
+                // Since the linked list is sorted, if there is no price
+                // overlap on the current order, there will be no price
+                // overlap on the later orders
+                if (swapAmount0 == 0 || swapAmount1 == 0) break;
+
+                emit Swap(
+                    swapAmount0,
+                    swapAmount1,
+                    bestAsk.id,
+                    bestAsk.owner,
+                    order.id,
+                    from
+                );
+
+                matchOrderLocalVars.filledAmount0 = matchOrderLocalVars.filledAmount0 + swapAmount0;
+                matchOrderLocalVars.filledAmount1 = matchOrderLocalVars.filledAmount1 + swapAmount1;
+
+                OrderMatchFill memory orderMatchFill = OrderMatchFill({
+                    isAsk: false,
+                    taker: from,
+                    maker: bestAsk.owner,
+                    matchAmount0: swapAmount0,
+                    matchAmount1: swapAmount1
+                });
+
+                orderMatchFills[matchOrderLocalVars.orderMatchFillIndex] = orderMatchFill;
+                matchOrderLocalVars.orderMatchFillIndex++;
+
+                order.amount1 =
+                    order.amount1 -
+                    (
+                        FullMath.mulDiv(
+                            order.amount1,
+                            swapAmount0,
+                            order.amount0
+                        )
+                    );
+                order.amount0 = order.amount0 - swapAmount0;
+
+                if (bestAsk.amount0 == swapAmount0) {
+                    // Remove the best ask from the order book if it is fully
+                    // filled
+                    atLeastOneFullSwap = true;
+                    ask.list[matchOrderLocalVars.index].active = false;
+                    delete ask.idToLimitOrder[bestAsk.id];
+                } else {
+                    // Update the best ask if it is partially filled
+                    bestAsk.amount0 = bestAsk.amount0 - swapAmount0;
+                    bestAsk.amount1 = bestAsk.amount1 - swapAmount1;
+                    break;
+                }
+
+                matchOrderLocalVars.index = ask.list[matchOrderLocalVars.index].next;
+            }
+            if (atLeastOneFullSwap) {
+                ask.list[matchOrderLocalVars.index].prev = 0;
+                ask.list[0].next = matchOrderLocalVars.index;
+            }
+        }
+
+        //execute the order-match fill instructions
+        if(matchOrderLocalVars.orderMatchFillIndex > 0) {
+
+            for(uint ind = 0 ; ind < matchOrderLocalVars.orderMatchFillIndex ; ++ind) {
+
+                OrderMatchFill memory orderMatchFill = orderMatchFills[ind];
+
+                if(orderMatchFill.isAsk) { 
+                    
+                    // for a sell-order, transfer token-0 amount to matched best-bid owner of orderBook
+                    bool success = sendToken(token0, orderMatchFill.maker, orderMatchFill.matchAmount0);
+
+                    if (!success) {
+                        claimableBaseToken[orderMatchFill.maker] += orderMatchFill.matchAmount0;
+                        emit ClaimableBalanceIncrease(
+                            orderMatchFill.maker,
+                            orderMatchFill.matchAmount0,
+                            claimableBaseToken[orderMatchFill.maker],
+                            true
+                        );
+                    }
+
+                    sendTokenSafe(token1, orderMatchFill.taker, orderMatchFill.matchAmount1);
+
+                } else {
+
+                    //Sending tokens to the maker account
+                    bool success = sendToken(token1, orderMatchFill.maker, orderMatchFill.matchAmount1);
+
+                    if (!success) {
+                        claimableQuoteToken[orderMatchFill.maker] += orderMatchFill.matchAmount1;
+                        emit ClaimableBalanceIncrease(
+                            orderMatchFill.maker,
+                            orderMatchFill.matchAmount1,
+                            claimableBaseToken[orderMatchFill.maker],
+                            true
+                        );
+                    }
+
+                    sendTokenSafe(token0, orderMatchFill.maker, orderMatchFill.matchAmount0);
+                }
+            }
+        }
+    }
+
     /// @notice Transfers tokens to sell (base or quote token) to the router contract depending on the size
     /// Matches the new order with existing orders in the order book if there are price overlaps
     /// Does not insert the remaining order into the order book post matching
@@ -239,7 +447,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
     /// @param order The limit order to fill
     /// @param isAsk Whether the order is an ask order
     /// @param from The address of the order sender
-    function matchOrder(
+    function matchLimitOrder(
         LimitOrder memory order,
         bool isAsk,
         address from
@@ -444,7 +652,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
             isAsk
         );
 
-        matchOrder(newOrder, isAsk, from);
+        matchLimitOrder(newOrder, isAsk, from);
 
         // If the order is not fully filled, insert it into the order book
         if (isAsk) {
@@ -547,14 +755,14 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
             isAsk
         );
 
-        matchOrder(newOrder, isAsk, from);
+        matchMarketOrder(newOrder, isAsk, from);
 
-        // If the order is not fully filled, refund the remaining deposited amount
-        if (isAsk) {
-            sendTokenSafe(token0, from, newOrder.amount0);
-        } else {
-            sendTokenSafe(token1, from, newOrder.amount1);
-        }
+        // // If the order is not fully filled, refund the remaining deposited amount
+        // if (isAsk) {
+        //     sendTokenSafe(token0, from, newOrder.amount0);
+        // } else {
+        //     sendTokenSafe(token1, from, newOrder.amount1);
+        // }
     }
 
     /// @inheritdoc IOrderBook
