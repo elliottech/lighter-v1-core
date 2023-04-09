@@ -275,6 +275,18 @@ contract Router is IBalanceChangeCallback {
         );
     }
 
+    /// @notice safeTransfer of funds between sender and recipient
+    /// from can be market-maker or taker and to can be either parties or orderBook
+    /// 
+    function safeTransferFromUser(
+        IERC20Metadata tokenToTransferFrom,
+        address from,
+        address to,
+        uint256 amount
+    ) external override {
+        tokenToTransferFrom.safeTransferFrom(from, to, amount);
+    }
+    
     /// @notice Get the order details of all limit orders in the order book.
     /// Each returned list contains the details of ask orders first, followed
     /// by bid orders

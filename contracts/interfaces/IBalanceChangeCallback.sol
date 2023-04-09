@@ -17,4 +17,14 @@ interface IBalanceChangeCallback {
         uint256 amount,
         uint8 orderBookId
     ) external;
+
+
+    /// safeTransfer of funds between maker and taker
+    function safeTransferFromUser(
+        IERC20Metadata tokenToTransferFrom,
+        address from,
+        address to,
+        uint256 amount
+    ) external;
+
 }
