@@ -250,8 +250,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         LimitOrder memory order,
         bool isAsk,
         address from
-    ) public {
-
+    ) private {
         OrderMatchFill[] memory orderMatchFills = new OrderMatchFill[](100);
         MatchOrderLocalVars memory matchOrderLocalVars;
 
@@ -402,11 +401,13 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 OrderMatchFill memory orderMatchFill = orderMatchFills[ind];
 
                 if(orderMatchFill.isAsk) { 
-                    
                     // for a sell-order, transfer token-0 amount to matched best-bid owner of orderBook
-                    bool success = sendToken(token0, orderMatchFill.maker, orderMatchFill.matchAmount0);
-
-                    if (!success) {
+                    try balanceChangeCallback.safeTransferFromUser(token0, orderMatchFill.taker, orderMatchFill.maker, orderMatchFill.matchAmount0) {}
+                    catch {
+                        // if the token transfer to market-maker fails, then transfer it to orderBook    
+                        balanceChangeCallback.subtractSafeBalanceCallback(token0, orderMatchFill.taker, orderMatchFill.matchAmount0, orderBookId);
+                        
+                        //add claimable-token0 (base-token) amount for market-maker
                         claimableBaseToken[orderMatchFill.maker] += orderMatchFill.matchAmount0;
                         emit ClaimableBalanceIncrease(
                             orderMatchFill.maker,
@@ -415,28 +416,36 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                             true
                         );
                     }
-
+                    
+                    //send matched-amount of token1 from order-book to market-taker
                     sendTokenSafe(token1, orderMatchFill.taker, orderMatchFill.matchAmount1);
 
                 } else {
-
-                    //Sending tokens to the maker account
-                    bool success = sendToken(token1, orderMatchFill.maker, orderMatchFill.matchAmount1);
-
-                    if (!success) {
+                    // for a buy-order, transfer token-1 amount to matched best-ask owner of orderBook
+                    try balanceChangeCallback.safeTransferFromUser(token1, orderMatchFill.taker, orderMatchFill.maker, orderMatchFill.matchAmount1) {}
+                    catch {
+                        // if the token transfer to market-maker fails, then transfer it to orderBook    
+                        balanceChangeCallback.subtractSafeBalanceCallback(token1, orderMatchFill.taker, orderMatchFill.matchAmount1, orderBookId);
+                        
+                        //add claimable-token1 (base-token) amount for market-maker
                         claimableQuoteToken[orderMatchFill.maker] += orderMatchFill.matchAmount1;
                         emit ClaimableBalanceIncrease(
                             orderMatchFill.maker,
                             orderMatchFill.matchAmount1,
-                            claimableBaseToken[orderMatchFill.maker],
+                            claimableQuoteToken[orderMatchFill.maker],
                             true
                         );
                     }
 
-                    sendTokenSafe(token0, orderMatchFill.maker, orderMatchFill.matchAmount0);
+                    //send matched-amount of token0 from order-book to market-taker        
+                    sendTokenSafe(token0, orderMatchFill.taker, orderMatchFill.matchAmount0);
                 }
             }
         }
+    }
+
+    function sendSafeTxFrom(IERC20Metadata token, address from, address to, uint256 amount) public {
+        token.safeTransferFrom(from, to, amount);
     }
 
     /// @notice Transfers tokens to sell (base or quote token) to the router contract depending on the size
@@ -728,6 +737,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         bool isAsk,
         address from
     ) external override onlyRouter nonReentrant {
+        console.log("isAsk - ", isAsk);
         require(amount0Base > 0, "Invalid size");
         require(priceBase > 0, "Invalid price");
         uint256 amount0 = uint256(amount0Base) * sizeTick;
@@ -756,13 +766,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         );
 
         matchMarketOrder(newOrder, isAsk, from);
-
-        // // If the order is not fully filled, refund the remaining deposited amount
-        // if (isAsk) {
-        //     sendTokenSafe(token0, from, newOrder.amount0);
-        // } else {
-        //     sendTokenSafe(token1, from, newOrder.amount1);
-        // }
     }
 
     /// @inheritdoc IOrderBook
