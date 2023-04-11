@@ -91,14 +91,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
     /// This can happen if the maker was blacklisted and no longer is
     event Claimed(address indexed owner, uint256 amount, bool isBaseToken);
 
-    struct OrderMatchFill {
-        bool isAsk;
-        address taker;
-        address maker;
-        uint256 matchAmount0;
-        uint256 matchAmount1;
-    }
-
     struct MatchOrderLocalVars {
         uint32 index;
         uint256 filledAmount0;
@@ -251,15 +243,16 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         bool isAsk,
         address from
     ) private {
-        OrderMatchFill[] memory orderMatchFills = new OrderMatchFill[](100);
         MatchOrderLocalVars memory matchOrderLocalVars;
 
         if (isAsk) {
             bool atLeastOneFullSwap = false;
 
             matchOrderLocalVars.index = bid.getFirstNode();
+
             while (matchOrderLocalVars.index != 1 && order.amount0 > 0) {
                 LimitOrder storage bestBid = bid.idToLimitOrder[matchOrderLocalVars.index];
+            
                 (
                     uint256 swapAmount0,
                     uint256 swapAmount1
@@ -281,16 +274,25 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 matchOrderLocalVars.filledAmount0 = matchOrderLocalVars.filledAmount0 + swapAmount0;
                 matchOrderLocalVars.filledAmount1 = matchOrderLocalVars.filledAmount1 + swapAmount1;
 
-                OrderMatchFill memory orderMatchFill = OrderMatchFill({
-                    isAsk: true,
-                    taker: from,
-                    maker: bestBid.owner,
-                    matchAmount0: swapAmount0,
-                    matchAmount1: swapAmount1
-                });
-
-                orderMatchFills[matchOrderLocalVars.orderMatchFillIndex] = orderMatchFill;
-                matchOrderLocalVars.orderMatchFillIndex++;
+                // do transfer b/w parties here
+                // for a sell-order, transfer token-0 amount to matched best-bid owner of orderBook
+                try balanceChangeCallback.safeTransferFromUser(token0, from, bestBid.owner, swapAmount0) {}
+                catch {
+                    // if the token transfer to market-maker fails, then transfer it to orderBook    
+                    balanceChangeCallback.subtractSafeBalanceCallback(token0, from, swapAmount0, orderBookId);
+                    
+                    //add claimable-token0 (base-token) amount for market-maker
+                    claimableBaseToken[bestBid.owner] += swapAmount0;
+                    emit ClaimableBalanceIncrease(
+                        bestBid.owner,
+                        swapAmount0,
+                        claimableBaseToken[bestBid.owner],
+                        true
+                    );
+                }
+                    
+                //send matched-amount of token1 from order-book to market-taker
+                sendTokenSafe(token1, from, swapAmount1);
 
                 order.amount1 =
                     order.amount1 -
@@ -350,16 +352,25 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 matchOrderLocalVars.filledAmount0 = matchOrderLocalVars.filledAmount0 + swapAmount0;
                 matchOrderLocalVars.filledAmount1 = matchOrderLocalVars.filledAmount1 + swapAmount1;
 
-                OrderMatchFill memory orderMatchFill = OrderMatchFill({
-                    isAsk: false,
-                    taker: from,
-                    maker: bestAsk.owner,
-                    matchAmount0: swapAmount0,
-                    matchAmount1: swapAmount1
-                });
+                // do transfer b/w parties here
+                 // for a buy-order, transfer token-1 amount to matched best-ask owner of orderBook
+                    try balanceChangeCallback.safeTransferFromUser(token1, from, bestAsk.owner, swapAmount1) {}
+                    catch {
+                        // if the token transfer to market-maker fails, then transfer it to orderBook    
+                        balanceChangeCallback.subtractSafeBalanceCallback(token1, from, swapAmount1, orderBookId);
+                        
+                        //add claimable-token1 (base-token) amount for market-maker
+                        claimableQuoteToken[bestAsk.owner] += swapAmount1;
+                        emit ClaimableBalanceIncrease(
+                            bestAsk.owner,
+                            swapAmount1,
+                            claimableQuoteToken[bestAsk.owner],
+                            true
+                        );
+                    }
 
-                orderMatchFills[matchOrderLocalVars.orderMatchFillIndex] = orderMatchFill;
-                matchOrderLocalVars.orderMatchFillIndex++;
+                    //send matched-amount of token0 from order-book to market-taker        
+                    sendTokenSafe(token0, from, swapAmount0);
 
                 order.amount1 =
                     order.amount1 -
@@ -390,56 +401,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
             if (atLeastOneFullSwap) {
                 ask.list[matchOrderLocalVars.index].prev = 0;
                 ask.list[0].next = matchOrderLocalVars.index;
-            }
-        }
-
-        //execute the order-match fill instructions
-        if(matchOrderLocalVars.orderMatchFillIndex > 0) {
-
-            for(uint ind = 0 ; ind < matchOrderLocalVars.orderMatchFillIndex ; ++ind) {
-
-                OrderMatchFill memory orderMatchFill = orderMatchFills[ind];
-
-                if(orderMatchFill.isAsk) { 
-                    // for a sell-order, transfer token-0 amount to matched best-bid owner of orderBook
-                    try balanceChangeCallback.safeTransferFromUser(token0, orderMatchFill.taker, orderMatchFill.maker, orderMatchFill.matchAmount0) {}
-                    catch {
-                        // if the token transfer to market-maker fails, then transfer it to orderBook    
-                        balanceChangeCallback.subtractSafeBalanceCallback(token0, orderMatchFill.taker, orderMatchFill.matchAmount0, orderBookId);
-                        
-                        //add claimable-token0 (base-token) amount for market-maker
-                        claimableBaseToken[orderMatchFill.maker] += orderMatchFill.matchAmount0;
-                        emit ClaimableBalanceIncrease(
-                            orderMatchFill.maker,
-                            orderMatchFill.matchAmount0,
-                            claimableBaseToken[orderMatchFill.maker],
-                            true
-                        );
-                    }
-                    
-                    //send matched-amount of token1 from order-book to market-taker
-                    sendTokenSafe(token1, orderMatchFill.taker, orderMatchFill.matchAmount1);
-
-                } else {
-                    // for a buy-order, transfer token-1 amount to matched best-ask owner of orderBook
-                    try balanceChangeCallback.safeTransferFromUser(token1, orderMatchFill.taker, orderMatchFill.maker, orderMatchFill.matchAmount1) {}
-                    catch {
-                        // if the token transfer to market-maker fails, then transfer it to orderBook    
-                        balanceChangeCallback.subtractSafeBalanceCallback(token1, orderMatchFill.taker, orderMatchFill.matchAmount1, orderBookId);
-                        
-                        //add claimable-token1 (base-token) amount for market-maker
-                        claimableQuoteToken[orderMatchFill.maker] += orderMatchFill.matchAmount1;
-                        emit ClaimableBalanceIncrease(
-                            orderMatchFill.maker,
-                            orderMatchFill.matchAmount1,
-                            claimableQuoteToken[orderMatchFill.maker],
-                            true
-                        );
-                    }
-
-                    //send matched-amount of token0 from order-book to market-taker        
-                    sendTokenSafe(token0, orderMatchFill.taker, orderMatchFill.matchAmount0);
-                }
             }
         }
     }
@@ -639,6 +600,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         require(priceBase > 0, "Invalid price");
         uint256 amount0 = uint256(amount0Base) * sizeTick;
         uint256 amount1 = uint256(priceBase) * amount0Base * priceMultiplier;
+        
         require(
             _orderIdCounter.current() < 1 << 32,
             "New order id exceeds limit"
@@ -737,7 +699,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
         bool isAsk,
         address from
     ) external override onlyRouter nonReentrant {
-        console.log("isAsk - ", isAsk);
         require(amount0Base > 0, "Invalid size");
         require(priceBase > 0, "Invalid price");
         uint256 amount0 = uint256(amount0Base) * sizeTick;
