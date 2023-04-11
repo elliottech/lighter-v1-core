@@ -150,19 +150,31 @@ describe("OrderBook contract, market orders", function () {
   });
 
   it("Market orders tests by filling bid limit orders", async function () {
-    const { router, acc1 } = await get_setup_values();
+    const { router, acc1, acc2 } = await get_setup_values();
 
-    // Create 5 ask limit orders
-    await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // 2
-    await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // 3
-    await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // 4
-    await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // 5
-    await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // 6
+    const marketMaker = acc2;
+    const marketTaker = acc1;
+    const orderBookId : number = 0;
+    const amount0base_limit: number = 1;
+    const price0Base_limit: number = 1;
+    const isAsk_limit: number = 0;
+    const hintId: number = 0;
 
-    // Create market order to fill first three asks
-    await router.connect(acc1).createMarketOrder(0, 3, 1, 1);
+    // Create 5 bid limit orders
+    await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 2
+    await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 3
+    await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 4
+    await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 5
+    await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 6
 
-    let order_ids = await router.getLimitOrders(0);
+    const amount0base_ask_market: number = 3;
+    const price0Base_ask_market: number = 1;
+    const isAsk_ask_market: number = 1;
+
+    // Create ask-market order to fill first three asks
+    await router.connect(marketTaker).createMarketOrder(orderBookId, amount0base_ask_market, price0Base_ask_market, isAsk_ask_market);
+
+    let order_ids = await router.getLimitOrders(orderBookId);
 
     expect(order_ids[0].length).to.equal(2);
     expect(order_ids[0]).to.deep.equal([5, 6]);
