@@ -129,6 +129,7 @@ describe("OrderBook contract, market orders", function () {
     
     expect(order_ids[0].length).to.equal(2);
     expect(order_ids[0]).to.deep.equal([5, 6]);
+
     //assert the balance of token0 for market-taker
     //after matching with 3 limit orders, 
     //the balance of token0 for market-taker should increase by 300 amount
@@ -150,7 +151,7 @@ describe("OrderBook contract, market orders", function () {
   });
 
   it("Market orders tests by filling bid limit orders", async function () {
-    const { router, acc1, acc2 } = await get_setup_values();
+    const { router, token0, token1, acc1, acc2, sizeTick, priceMultiplier } = await get_setup_values();
 
     const marketMaker = acc2;
     const marketTaker = acc1;
@@ -160,12 +161,32 @@ describe("OrderBook contract, market orders", function () {
     const isAsk_limit: number = 0;
     const hintId: number = 0;
 
+    const token1_balance_bef_limit_order_market_maker = await token1.balanceOf(marketMaker.address);
+
     // Create 5 bid limit orders
     await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 2
     await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 3
     await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 4
     await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 5
     await router.connect(marketMaker).createLimitOrder(orderBookId, amount0base_limit, price0Base_limit, isAsk_limit, hintId); // 6
+
+    const token1_balance_aft_limit_order_market_maker = await token1.balanceOf(marketMaker.address);
+
+    //assert the balance of token1 for market-maker
+    //after adding 5 bid-limit orders, 
+    //the balance of token1 for market-maker should decrease by 5
+    expect(
+      (token1_balance_aft_limit_order_market_maker).eq(
+        BigInt(token1_balance_bef_limit_order_market_maker) - BigInt(5)
+      )
+    ).to.be.true;
+
+
+    const token1_balance_aft_limit_order_market_taker = await token1.balanceOf(marketTaker.address);
+    const token0_balance_aft_limit_order_market_maker = await token0.balanceOf(marketMaker.address);
+
+    const token1_balance_bef_mkt_order_market_taker = await token1.balanceOf(marketTaker.address);
+    const token0_balance_bef_mkt_order_market_taker = await token0.balanceOf(marketTaker.address);
 
     const amount0base_ask_market: number = 3;
     const price0Base_ask_market: number = 1;
@@ -178,6 +199,39 @@ describe("OrderBook contract, market orders", function () {
 
     expect(order_ids[0].length).to.equal(2);
     expect(order_ids[0]).to.deep.equal([5, 6]);
+
+    const token0_balance_aft_mkt_order_market_maker = await token0.balanceOf(marketMaker.address);
+    const token1_balance_aft_mkt_order_market_taker = await token1.balanceOf(marketTaker.address);
+    const token0_balance_aft_mkt_order_market_taker = await token0.balanceOf(marketTaker.address);
+    
+    //assert the balance of token0 for market-maker
+    //after matching ask-market-order with 3 bid-limit orders, 
+    //the balance of token0 for market-maker should increase by 300 amount
+    expect(
+      (token0_balance_aft_mkt_order_market_maker).eq(
+        BigInt(token0_balance_bef_mkt_order_market_taker) + BigInt(3 * sizeTick)
+      )
+    ).to.be.true;
+
+    //assert the balance of token1 for market-taker
+    //after matching ask-market-order with 3 bid-limit-orders, 
+    //the balance of token1 for market-taker should increase by 3 amount
+    expect(
+      (token1_balance_aft_mkt_order_market_taker).eq(
+        BigInt(token1_balance_aft_limit_order_market_taker) + BigInt(3 * amount0base_limit * price0Base_limit * priceMultiplier)
+      )
+    ).to.be.true;
+
+
+    //assert the balance of token0 for market-taker
+    //after matching ask-market-order with 3 bid-limit-orders, 
+    //the balance of token0 for market-taker should decrease by 300 amount
+    expect(
+      (token0_balance_aft_mkt_order_market_taker).eq(
+        BigInt(token0_balance_bef_mkt_order_market_taker) - BigInt(3 * sizeTick)
+      )
+    ).to.be.true;
+
   });
 
   it("Market-Bid order tests with fallback function", async function () {
