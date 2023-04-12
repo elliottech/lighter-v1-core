@@ -290,10 +290,7 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                         true
                     );
                 }
-                    
-                //send matched-amount of token1 from order-book to market-taker
-                sendTokenSafe(token1, from, swapAmount1);
-
+                
                 order.amount1 =
                     order.amount1 -
                     (
@@ -324,7 +321,9 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 bid.list[matchOrderLocalVars.index].prev = 0;
                 bid.list[0].next = matchOrderLocalVars.index;
             }
-
+              
+            //send matched-amount of token1 from order-book to market-taker
+            sendTokenSafe(token1, from, matchOrderLocalVars.filledAmount1);
         } else {
             bool atLeastOneFullSwap = false;
 
@@ -369,9 +368,6 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                         );
                     }
 
-                    //send matched-amount of token0 from order-book to market-taker        
-                    sendTokenSafe(token0, from, swapAmount0);
-
                 order.amount1 =
                     order.amount1 -
                     (
@@ -402,6 +398,9 @@ contract OrderBook is IOrderBook, ReentrancyGuard {
                 ask.list[matchOrderLocalVars.index].prev = 0;
                 ask.list[0].next = matchOrderLocalVars.index;
             }
+
+            //send matched-amount of token0 from order-book to market-taker        
+            sendTokenSafe(token0, from, matchOrderLocalVars.filledAmount0);
         }
     }
 
