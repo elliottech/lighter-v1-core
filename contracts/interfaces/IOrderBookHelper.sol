@@ -35,7 +35,8 @@ interface IOrderBookHelper {
     /// @param amountOut Upper bound for the amount to receive after the swap.
     /// @param isOutToken0 True if the amountOut is token0, false otherwise
     /// @return amount0Base The amount0 in base units
-    /// @return priceBase The price in base units
+    /
+    // @return priceBase The price in base units
     /// @return isAsk True if the market order is an ask, false otherwise
     /// @return amount0 Exact amount0 to send or receive
     /// @return amount1 Exact amount1 to send or receive
