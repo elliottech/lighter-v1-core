@@ -5,11 +5,6 @@ pragma solidity 0.8.16;
 /// @notice Helper contracts provides view functions for Lighter users
 /// to fetch and compute swap and book information
 interface IOrderBookHelper {
-    // /// @notice Get the maximum order book id
-    // /// Order book id's are incremented by 1 for each order book created
-    // /// @return maxOrderBookId The maximum order book id
-    // function getMaxOrderBookId() external view returns (uint8);
-
     /// @notice Returns the details for all existing order books
     /// @return orderBookIds The id of the order book
     /// @return orderBookAddresses The address of the order book
@@ -29,55 +24,27 @@ interface IOrderBookHelper {
             uint8[] memory priceTicks
         );
 
-    // /// @notice Returns market order inputs for given order book and amount to receive
-    // /// Returned data is the biggest order bounded by receiving at most amountOut tokens
-    // /// @param orderBookId Id of the order book to get the swap data on
-    // /// @param amountOut Upper bound for the amount to receive after the swap.
-    // /// @param isOutToken0 True if the amountOut is token0, false otherwise
-    // /// @return amount0Base The amount0 in base units
-    // /// @return priceBase The price in base units
-    // /// @return isAsk True if the market order is an ask, false otherwise
-    // /// @return amount0 Exact amount0 to send or receive
-    // /// @return amount1 Exact amount1 to send or receive
-    // function getSwapDataFromOut(
-    //     uint8 orderBookId,
-    //     uint256 amountOut,
-    //     bool isOutToken0
-    // )
-    //     external
-    //     view
-    //     returns (
-    //         uint64 amount0Base,
-    //         uint64 priceBase,
-    //         bool isAsk,
-    //         uint256 amount0,
-    //         uint256 amount1
-    //     );
+    /// @notice Returns max amount to receive for given input amount
+    /// @param orderBookId Id of the order book to get the swap data on
+    /// @param isAsk True if the amountIn is token0, false otherwise
+    /// @param amountIn Upper bound for the amount to send for the swap.
+    /// @return amountOut The amount of out token received
+    function quoteExactInput(
+        uint8 orderBookId,
+        bool isAsk,
+        uint256 amountIn
+    ) external view returns (uint256 amountOut);
 
-    // /// @notice Returns market order inputs for given order book and amount to receive
-    // /// Returned data is the biggest order bounded by sending at most amountIn tokens
-    // /// @param orderBookId Id of the order book to get the swap data on
-    // /// @param amountIn Upper bound for the amount to send for the swap.
-    // /// @param isInToken0 True if the amountIn is token0, false otherwise
-    // /// @return amount0Base The amount0 in base units
-    // /// @return priceBase The price in base units
-    // /// @return isAsk True if the market order is an ask, false otherwise
-    // /// @return amount0 Exact amount0 to send or receive
-    // /// @return amount1 Exact amount1 to send or receive
-    // function getSwapDataFromIn(
-    //     uint8 orderBookId,
-    //     uint256 amountIn,
-    //     bool isInToken0
-    // )
-    //     external
-    //     view
-    //     returns (
-    //         uint64 amount0Base,
-    //         uint64 priceBase,
-    //         bool isAsk,
-    //         uint256 amount0,
-    //         uint256 amount1
-    //     );
+    /// @notice Returns max amount to send for given output amount
+    /// @param orderBookId Id of the order book to get the swap data on
+    /// @param isAsk True if the amountIn is token0, false otherwise
+    /// @param amountOut Upper bound for the amount to receive after the swap.
+    /// @return amountIn The amount of in token sent
+    function quoteExactOutput(
+        uint8 orderBookId,
+        bool isAsk,
+        uint256 amountOut
+    ) external view returns (uint256 amountIn);
 
     /// @notice Swaps given amount of tokens for the given order book and min amount to receive
     /// Returned amount is the swapped amount bounded by receiving at least amountOutMin tokens
@@ -93,17 +60,17 @@ interface IOrderBookHelper {
         uint256 minAmountOut
     ) external returns (uint256 amountOut);
 
-    //     /// @notice Swaps given amount of tokens for the given order book and max amount to send
-    //     /// Returned amount is the swapped amount bounded by sending at most amountInMax tokens
-    //     /// @param orderBookId Id of the order book to get the swap data on
-    //     /// @param isAsk True if the amountIn is token0, false otherwise
-    //     /// @param amountOut amount to receive after the swap.
-    //     /// @param maxAmountIn Upper bound for the amount to send for the swap.
-    //     /// @return amountIn The amount of in token sent
-    //     function swapExactOutput(
-    //         uint8 orderBookId,
-    //         bool isAsk,
-    //         uint256 amountOut,
-    //         uint256 maxAmountIn
-    //     ) external returns (uint256 amountIn);
+    /// @notice Swaps given amount of tokens for the given order book and max amount to send
+    /// Returned amount is the swapped amount bounded by sending at most amountInMax tokens
+    /// @param orderBookId Id of the order book to get the swap data on
+    /// @param isAsk True if the amountIn is token0, false otherwise
+    /// @param amountOut amount to receive after the swap.
+    /// @param maxAmountIn Upper bound for the amount to send for the swap.
+    /// @return amountIn The amount of in token sent
+    function swapExactOutput(
+        uint8 orderBookId,
+        bool isAsk,
+        uint256 amountOut,
+        uint256 maxAmountIn
+    ) external returns (uint256 amountIn);
 }
