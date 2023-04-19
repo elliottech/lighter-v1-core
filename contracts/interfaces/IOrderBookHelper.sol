@@ -28,23 +28,25 @@ interface IOrderBookHelper {
     /// @param orderBookId Id of the order book to get the swap data on
     /// @param isAsk True if the amountIn is token0, false otherwise
     /// @param amountIn Upper bound for the amount to send for the swap.
-    /// @return amountOut The amount of out token received
+    /// @return resAmountIn The amount of in token
+    /// @return amountOut The amount of out token
     function quoteExactInput(
         uint8 orderBookId,
         bool isAsk,
         uint256 amountIn
-    ) external view returns (uint256 amountOut);
+    ) external view returns (uint256 resAmountIn, uint256 amountOut);
 
     /// @notice Returns max amount to send for given output amount
     /// @param orderBookId Id of the order book to get the swap data on
     /// @param isAsk True if the amountIn is token0, false otherwise
     /// @param amountOut Upper bound for the amount to receive after the swap.
     /// @return amountIn The amount of in token sent
+    /// @return resAmountOut The amount of out token
     function quoteExactOutput(
         uint8 orderBookId,
         bool isAsk,
         uint256 amountOut
-    ) external view returns (uint256 amountIn);
+    ) external view returns (uint256 amountIn, uint256 resAmountOut);
 
     /// @notice Swaps given amount of tokens for the given order book and min amount to receive
     /// Returned amount is the swapped amount bounded by receiving at least amountOutMin tokens

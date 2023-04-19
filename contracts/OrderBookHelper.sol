@@ -82,7 +82,14 @@ contract OrderBookHelper is IOrderBookHelper {
         uint8 orderBookId,
         bool isAsk,
         uint256 amountIn
-    ) external view override returns (uint256 amountOut) {
+    ) external view override returns (uint256 resAmountIn, uint256 amountOut) {
+        address orderBookAddress = factory.getOrderBookFromId(orderBookId);
+        IOrderBook orderBook = IOrderBook(orderBookAddress);
+
+        if (isAsk) {
+            amountIn = amountIn - (amountIn % orderBook.sizeTick());
+        }
+
         uint256 remainingAmountIn = amountIn;
         uint256 runningAmountOut = 0;
 
@@ -105,23 +112,40 @@ contract OrderBookHelper is IOrderBookHelper {
                 } else {
                     uint256 partialAmountOut = (remainingAmountIn *
                         orderAmountOut) / orderAmountIn;
+
+                    if (!isAsk) {
+                        partialAmountOut =
+                            partialAmountOut -
+                            (partialAmountOut % orderBook.sizeTick());
+                    }
+
+                    if (partialAmountOut == 0) {
+                        break;
+                    }
                     runningAmountOut += partialAmountOut;
-                    remainingAmountIn = 0;
+                    remainingAmountIn -=
+                        (partialAmountOut * orderAmountIn) /
+                        orderAmountOut;
                 }
             }
         }
 
-        // Should we add this check? or return what we have?
-        require(remainingAmountIn == 0, "Not enough liquidity");
-
         amountOut = runningAmountOut;
+        resAmountIn = amountIn - remainingAmountIn;
     }
 
     function quoteExactOutput(
         uint8 orderBookId,
         bool isAsk,
         uint256 amountOut
-    ) external view override returns (uint256) {
+    ) external view override returns (uint256, uint256) {
+        address orderBookAddress = factory.getOrderBookFromId(orderBookId);
+        IOrderBook orderBook = IOrderBook(orderBookAddress);
+
+        if (!isAsk) {
+            amountOut = amountOut - (amountOut % orderBook.sizeTick());
+        }
+
         uint256 remainingAmountOut = amountOut;
         uint256 runningAmountIn = 0;
 
@@ -139,9 +163,9 @@ contract OrderBookHelper is IOrderBookHelper {
             i++
         ) {
             // isAsk true means we are buying from asks or selling to bids
-            if (isAsk == isAsks[i]) {
-                uint256 orderAmountOut = isAsk ? amount0s[i] : amount1s[i];
-                uint256 orderAmountIn = isAsk ? amount1s[i] : amount0s[i];
+            if (isAsk != isAsks[i]) {
+                uint256 orderAmountIn = isAsk ? amount0s[i] : amount1s[i];
+                uint256 orderAmountOut = isAsk ? amount1s[i] : amount0s[i];
 
                 if (remainingAmountOut >= orderAmountOut) {
                     runningAmountIn += orderAmountIn;
@@ -150,16 +174,25 @@ contract OrderBookHelper is IOrderBookHelper {
                     uint256 partialAmountIn = (remainingAmountOut *
                         orderAmountIn) / orderAmountOut;
 
+                    if (isAsk) {
+                        partialAmountIn =
+                            partialAmountIn -
+                            (partialAmountIn % orderBook.sizeTick());
+                    }
+
+                    if (partialAmountIn == 0) {
+                        break;
+                    }
+
                     runningAmountIn += partialAmountIn;
-                    remainingAmountOut = 0;
+                    remainingAmountOut -=
+                        (partialAmountIn * orderAmountOut) /
+                        orderAmountIn;
                 }
             }
         }
 
-        // Should we add this check? or return what we have?
-        require(remainingAmountOut == 0, "Not enough liquidity");
-
-        return runningAmountIn;
+        return (runningAmountIn, amountOut - remainingAmountOut);
     }
 
     struct SwapExectInputData {
@@ -171,8 +204,6 @@ contract OrderBookHelper is IOrderBookHelper {
         uint256 amountOut;
         uint256 amount0Base;
         uint256 priceBase;
-        uint256 partialAmount0;
-        uint256 partialAmount1;
     }
 
     function swapExactInput(
@@ -244,63 +275,68 @@ contract OrderBookHelper is IOrderBookHelper {
             );
 
             data.remainingAmountIn = amountIn;
+            LimitOrder memory bestAsk;
             while (data.remainingAmountIn > 0) {
-                LimitOrder memory bestAsk = router.getBestAsk(orderBookId);
-
-                // Check if there's a best ask order
-                if (bestAsk.owner == address(0)) {
+                // out -> token 0
+                // in -> token 1
+                try router.getBestAsk(orderBookId) returns (
+                    LimitOrder memory order
+                ) {
+                    bestAsk = order;
+                } catch {
                     break;
                 }
 
-                if (data.remainingAmountIn >= bestAsk.amount1) {
-                    data.amount0Base = bestAsk.amount0 / orderBook.sizeTick();
-                    data.priceBase =
-                        bestAsk.amount1 /
-                        (data.amount0Base * orderBook.priceMultiplier());
+                data.token0BalanceBefore = orderBook.token0().balanceOf(
+                    address(this)
+                );
 
-                    router.createMarketOrder(
-                        orderBookId,
-                        uint64(data.amount0Base),
-                        uint64(data.priceBase),
-                        isAsk
-                    );
+                data.token1BalanceBefore = orderBook.token1().balanceOf(
+                    address(this)
+                );
 
-                    // do we need to check the result of createMarketOrder? I believe no since order book state doesn't change in this transaction
-                    // and if something goes wrong, it will revert
-                    data.remainingAmountIn -= bestAsk.amount1;
-                    data.amountOut += bestAsk.amount0;
-                } else {
-                    // uint256 partialAmount0 = (remainingAmountIn * bestAsk.amount0) / bestAsk.amount1;
-                    data.partialAmount0 = FullMath.mulDiv(
-                        data.remainingAmountIn,
-                        bestAsk.amount0,
-                        bestAsk.amount1
-                    );
-                    data.partialAmount1 = data.remainingAmountIn;
+                data.priceBase =
+                    (bestAsk.amount1 * orderBook.sizeTick()) /
+                    bestAsk.amount0 /
+                    orderBook.priceMultiplier();
 
-                    // uint256 amount0Base = partialAmount0 / orderBook.sizeTick();
-                    data.amount0Base = FullMath.mulDiv(
-                        data.partialAmount0,
-                        1,
-                        orderBook.sizeTick()
-                    );
-                    // uint256.priceBase = remainingAmountIn / (amount0Base * orderBook.priceMultiplier());
-                    data.priceBase = FullMath.mulDiv(
-                        data.partialAmount1,
-                        1,
-                        (data.amount0Base * orderBook.priceMultiplier())
-                    );
+                data.amount0Base =
+                    data.remainingAmountIn /
+                    data.priceBase /
+                    orderBook.priceMultiplier();
 
-                    router.createMarketOrder(
-                        orderBookId,
-                        uint64(data.amount0Base),
-                        uint64(data.priceBase),
-                        isAsk
-                    );
-
-                    data.remainingAmountIn = 0;
-                    data.amountOut += data.partialAmount0;
+                if (data.amount0Base == 0) {
+                    break;
                 }
+
+                require(
+                    data.priceBase *
+                        data.amount0Base *
+                        orderBook.priceMultiplier() <=
+                        data.token1BalanceBefore,
+                    "Slippage is too high"
+                );
+
+                router.createMarketOrder(
+                    orderBookId,
+                    uint64(data.amount0Base),
+                    uint64(data.priceBase),
+                    isAsk
+                );
+
+                data.token0BalanceAfter = (orderBook.token0()).balanceOf(
+                    address(this)
+                );
+                data.token1BalanceAfter = (orderBook.token1()).balanceOf(
+                    address(this)
+                );
+
+                data.remainingAmountIn -=
+                    data.token1BalanceBefore -
+                    data.token1BalanceAfter;
+                data.amountOut +=
+                    data.token0BalanceAfter -
+                    data.token0BalanceBefore;
             }
 
             require(
@@ -329,8 +365,6 @@ contract OrderBookHelper is IOrderBookHelper {
         uint256 amountIn;
         uint256 amount0Base;
         uint256 priceBase;
-        uint256 partialAmount0;
-        uint256 partialAmount1;
     }
 
     function swapExactOutput(
@@ -346,9 +380,105 @@ contract OrderBookHelper is IOrderBookHelper {
 
         SwapExectOutputData memory data;
 
-        if (!isAsk) {
-            // Buy token0
+        if (isAsk) {
+            orderBook.token0().safeTransferFrom(
+                msg.sender,
+                address(this),
+                maxAmountIn
+            );
+
+            // out -> token 1
+            // in -> token 0
+            data.remainingAmountOut = amountOut;
+            LimitOrder memory bestBid;
+            bool tickDone = false;
+            while (data.remainingAmountOut > 0) {
+                try router.getBestBid(orderBookId) returns (
+                    LimitOrder memory order
+                ) {
+                    bestBid = order;
+                } catch {
+                    break;
+                }
+
+                data.token0BalanceBefore = orderBook.token0().balanceOf(
+                    address(this)
+                );
+                data.token1BalanceBefore = orderBook.token1().balanceOf(
+                    address(this)
+                );
+
+                data.priceBase =
+                    (bestBid.amount1 * orderBook.sizeTick()) /
+                    bestBid.amount0 /
+                    orderBook.priceMultiplier();
+
+                data.amount0Base =
+                    data.remainingAmountOut /
+                    data.priceBase /
+                    orderBook.priceMultiplier();
+
+                if (data.amount0Base == 0) {
+                    tickDone = true;
+                    break;
+                }
+
+                // this means you don't have enough token 0 to buy the amount of token 1 you want
+                require(
+                    data.amount0Base * orderBook.sizeTick() <=
+                        data.token0BalanceBefore,
+                    "Slippage is too high"
+                );
+
+                router.createMarketOrder(
+                    orderBookId,
+                    uint64(data.amount0Base),
+                    uint64(data.priceBase),
+                    isAsk
+                );
+
+                data.token0BalanceAfter = orderBook.token0().balanceOf(
+                    address(this)
+                );
+                data.token1BalanceAfter = orderBook.token1().balanceOf(
+                    address(this)
+                );
+
+                data.amountIn +=
+                    data.token0BalanceBefore -
+                    data.token0BalanceAfter;
+
+                data.remainingAmountOut -=
+                    data.token1BalanceAfter -
+                    data.token1BalanceBefore;
+            }
+
+            require(
+                data.remainingAmountOut == 0 || tickDone,
+                "Not enough liquidity"
+            );
+
+            require(
+                data.amountIn <= maxAmountIn,
+                "Slippage is too high or not enough liquidty"
+            );
+
+            (orderBook.token1()).safeTransfer(
+                msg.sender,
+                amountOut - data.remainingAmountOut
+            );
+
+            if (maxAmountIn - data.amountIn > 0) {
+                (orderBook.token0()).safeTransfer(
+                    msg.sender,
+                    maxAmountIn - data.amountIn
+                );
+            }
+        } else {
+            // out -> token 0
+            // in -> token 1
             amountOut = amountOut - (amountOut % orderBook.sizeTick());
+            data.remainingAmountOut = amountOut;
 
             orderBook.token1().safeTransferFrom(
                 msg.sender,
@@ -356,33 +486,65 @@ contract OrderBookHelper is IOrderBookHelper {
                 maxAmountIn
             );
 
-            data.token0BalanceBefore = orderBook.token0().balanceOf(
-                address(this)
-            );
+            LimitOrder memory bestAsk;
+            // in -> token 1
+            // out -> token 0
+            while (data.remainingAmountOut > 0) {
+                try router.getBestAsk(orderBookId) returns (
+                    LimitOrder memory order
+                ) {
+                    bestAsk = order;
+                } catch {
+                    break;
+                }
 
-            data.token1BalanceBefore = orderBook.token1().balanceOf(
-                address(this)
-            );
+                data.token0BalanceBefore = orderBook.token0().balanceOf(
+                    address(this)
+                );
+                data.token1BalanceBefore = orderBook.token1().balanceOf(
+                    address(this)
+                );
 
-            data.amount0Base = amountOut / orderBook.sizeTick();
+                data.priceBase =
+                    (bestAsk.amount1 * orderBook.sizeTick()) /
+                    bestAsk.amount0 /
+                    orderBook.priceMultiplier();
 
-            router.createMarketOrder(
-                orderBookId,
-                uint64(data.amount0Base),
-                type(uint64).max,
-                isAsk
-            );
+                data.amount0Base =
+                    data.remainingAmountOut /
+                    orderBook.sizeTick();
 
-            data.token0BalanceAfter = (orderBook.token0()).balanceOf(
-                address(this)
-            );
-            data.token1BalanceAfter = (orderBook.token1()).balanceOf(
-                address(this)
-            );
+                require(
+                    data.priceBase *
+                        data.amount0Base *
+                        orderBook.priceMultiplier() <=
+                        data.token1BalanceBefore,
+                    "Slippage is too high"
+                );
 
-            data.amountIn =
-                maxAmountIn -
-                (data.token1BalanceAfter - data.token1BalanceBefore);
+                router.createMarketOrder(
+                    orderBookId,
+                    uint64(data.amount0Base),
+                    uint64(data.priceBase),
+                    isAsk
+                );
+
+                data.token0BalanceAfter = orderBook.token0().balanceOf(
+                    address(this)
+                );
+                data.token1BalanceAfter = orderBook.token1().balanceOf(
+                    address(this)
+                );
+
+                data.remainingAmountOut -=
+                    data.token0BalanceAfter -
+                    data.token0BalanceBefore;
+                data.amountIn +=
+                    data.token1BalanceBefore -
+                    data.token1BalanceAfter;
+            }
+
+            require(data.remainingAmountOut == 0, "Not enough liquidity");
 
             require(
                 data.amountIn <= maxAmountIn,
@@ -391,89 +553,10 @@ contract OrderBookHelper is IOrderBookHelper {
 
             orderBook.token0().safeTransfer(msg.sender, amountOut);
 
-            if (data.token1BalanceAfter - data.token1BalanceBefore > 0) {
+            if (maxAmountIn - data.amountIn > 0) {
                 (orderBook.token1()).safeTransfer(
                     msg.sender,
-                    data.token1BalanceAfter - data.token1BalanceBefore
-                );
-            }
-        } else {
-            orderBook.token0().safeTransferFrom(
-                msg.sender,
-                address(this),
-                maxAmountIn
-            );
-
-            data.remainingAmountOut = amountOut;
-            while (data.remainingAmountOut > 0) {
-                LimitOrder memory bestBid = router.getBestBid(orderBookId);
-
-                // Check if there's a best ask order
-                if (bestBid.owner == address(0)) {
-                    break;
-                }
-
-                if (data.remainingAmountOut >= bestBid.amount1) {
-                    data.amount0Base = bestBid.amount0 / orderBook.sizeTick();
-                    data.priceBase =
-                        bestBid.amount1 /
-                        (data.amount0Base * orderBook.priceMultiplier());
-
-                    router.createMarketOrder(
-                        orderBookId,
-                        uint64(data.amount0Base),
-                        uint64(data.priceBase),
-                        isAsk
-                    );
-
-                    // do we need to check the result of createMarketOrder? I believe no since order book state doesn't change in this transaction
-                    // and if something goes wrong, it will revert
-                    data.remainingAmountOut -= bestBid.amount1;
-                    data.amountIn += bestBid.amount0;
-                } else {
-                    // uint256 partialAmount0 = (remainingAmountOut * bestAsk.amount0) / bestAsk.amount1;
-                    data.partialAmount0 = FullMath.mulDiv(
-                        data.remainingAmountOut,
-                        bestBid.amount0,
-                        bestBid.amount1
-                    );
-                    data.partialAmount1 = data.remainingAmountOut;
-
-                    data.amount0Base =
-                        data.partialAmount0 /
-                        orderBook.sizeTick();
-
-                    data.priceBase =
-                        data.partialAmount1 /
-                        (data.amount0Base * orderBook.priceMultiplier());
-
-                    router.createMarketOrder(
-                        orderBookId,
-                        uint64(data.amount0Base),
-                        uint64(data.priceBase),
-                        isAsk
-                    );
-
-                    data.remainingAmountOut = 0;
-                    data.amountIn += data.partialAmount0;
-                }
-            }
-
-            if (data.remainingAmountOut < 0) {
-                revert("Not enough liquidity");
-            }
-
-            require(
-                data.amountIn <= maxAmountIn,
-                "Slippage is too high or not enough liquidty"
-            );
-
-            (orderBook.token1()).safeTransfer(msg.sender, amountOut);
-
-            if (data.token0BalanceBefore - data.token0BalanceAfter > 0) {
-                (orderBook.token1()).safeTransfer(
-                    msg.sender,
-                    data.token0BalanceBefore - data.token0BalanceAfter
+                    maxAmountIn - data.amountIn
                 );
             }
         }
