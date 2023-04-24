@@ -134,7 +134,7 @@ describe("OrderBook contract, market orders", function () {
       expect(result[1]).to.equal(3);
     });
 
-    it("swapExactOutput test by selling token0, diff price", async function () {
+    it("quoteExactOutput test by selling token0, diff price", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -153,7 +153,7 @@ describe("OrderBook contract, market orders", function () {
       expect(result[1]).to.equal(12);
     });
 
-    it("swapExactOutput test by selling token0, not enough liquidity", async function () {
+    it("quoteExactOutput test by selling token0, not enough liquidity", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -172,7 +172,7 @@ describe("OrderBook contract, market orders", function () {
       expect(result[1]).to.equal(15);
     });
 
-    it("swapExactOutput test by selling token0, wrong tick", async function () {
+    it("quoteExactOutput test by selling token0, wrong tick", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -231,7 +231,7 @@ describe("OrderBook contract, market orders", function () {
       expect(result[1]).to.equal(500);
     });
 
-    it("swapExactOutput test by selling token0, not enough liquidity", async function () {
+    it("quoteExactOutput test by selling token0, not enough liquidity", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -252,7 +252,7 @@ describe("OrderBook contract, market orders", function () {
   });
 
   describe("quoteExactInput, isAsk=True", function () {
-    it("swapExactInput test by selling token0", async function () {
+    it("quoteExactInput test by selling token0", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -271,7 +271,7 @@ describe("OrderBook contract, market orders", function () {
       expect(result[1]).to.equal(3);
     });
 
-    it("swapExactInput test by selling token0, diff price", async function () {
+    it("quoteExactInput test by selling token0, diff price", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -290,7 +290,7 @@ describe("OrderBook contract, market orders", function () {
       expect(result[1]).to.equal(12);
     });
 
-    it("swapExactInput test by selling token0, not enough liquidity", async function () {
+    it("quoteExactInput test by selling token0, not enough liquidity", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
@@ -311,7 +311,7 @@ describe("OrderBook contract, market orders", function () {
   });
 
   describe("quoteExactInput, isAsk=False", function () {
-    it("swapExactInput test by selling token1", async function () {
+    it("quoteExactInput test by selling token1", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 ask limit orders
