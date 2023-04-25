@@ -95,20 +95,13 @@ describe("OrderBook contract, market orders", function () {
 
   describe("getAllOrderBooks", function () {
     it("getAllOrderBooks test", async function () {
-      const { orderBookHelper } = await get_setup_values(); // Create the order book
+      const { orderBookHelper, token0, token1 } = await get_setup_values(); // Create the order book
 
       const result = await orderBookHelper.getAllOrderBooks();
 
       expect(result.orderBookIds[0]).to.equal(0);
-      expect(result.orderBookAddresses[0]).to.equal(
-        "0x75537828f2ce51be7289709686A69CbFDbB714F1"
-      );
-      expect(result.token0s[0]).to.equal(
-        "0x0165878A594ca255338adfa4d48449f69242Eb8F"
-      );
-      expect(result.token1s[0]).to.equal(
-        "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
-      );
+      expect(result.token0s[0]).to.equal(token0.address);
+      expect(result.token1s[0]).to.equal(token1.address);
       expect(result.sizeTicks[0]).to.equal(100);
       expect(result.priceTicks[0]).to.equal(10);
     });
