@@ -276,6 +276,13 @@ contract OrderBookHelper is IOrderBookHelper {
 
             data.remainingAmountIn = amountIn;
             LimitOrder memory bestAsk;
+            data.token0BalanceBefore = orderBook.token0().balanceOf(
+                address(this)
+            );
+
+            data.token1BalanceBefore = orderBook.token1().balanceOf(
+                address(this)
+            );
             while (data.remainingAmountIn > 0) {
                 // out -> token 0
                 // in -> token 1
@@ -286,14 +293,6 @@ contract OrderBookHelper is IOrderBookHelper {
                 } catch {
                     break;
                 }
-
-                data.token0BalanceBefore = orderBook.token0().balanceOf(
-                    address(this)
-                );
-
-                data.token1BalanceBefore = orderBook.token1().balanceOf(
-                    address(this)
-                );
 
                 data.priceBase =
                     (bestAsk.amount1 * orderBook.sizeTick()) /
@@ -337,6 +336,9 @@ contract OrderBookHelper is IOrderBookHelper {
                 data.amountOut +=
                     data.token0BalanceAfter -
                     data.token0BalanceBefore;
+
+                data.token0BalanceBefore = data.token0BalanceAfter;
+                data.token1BalanceBefore = data.token1BalanceAfter;
             }
 
             require(
@@ -392,6 +394,12 @@ contract OrderBookHelper is IOrderBookHelper {
             data.remainingAmountOut = amountOut;
             LimitOrder memory bestBid;
             bool tickDone = false;
+            data.token0BalanceBefore = orderBook.token0().balanceOf(
+                address(this)
+            );
+            data.token1BalanceBefore = orderBook.token1().balanceOf(
+                address(this)
+            );
             while (data.remainingAmountOut > 0) {
                 try router.getBestBid(orderBookId) returns (
                     LimitOrder memory order
@@ -400,13 +408,6 @@ contract OrderBookHelper is IOrderBookHelper {
                 } catch {
                     break;
                 }
-
-                data.token0BalanceBefore = orderBook.token0().balanceOf(
-                    address(this)
-                );
-                data.token1BalanceBefore = orderBook.token1().balanceOf(
-                    address(this)
-                );
 
                 data.priceBase =
                     (bestBid.amount1 * orderBook.sizeTick()) /
@@ -451,6 +452,9 @@ contract OrderBookHelper is IOrderBookHelper {
                 data.remainingAmountOut -=
                     data.token1BalanceAfter -
                     data.token1BalanceBefore;
+
+                data.token0BalanceBefore = data.token0BalanceAfter;
+                data.token1BalanceBefore = data.token1BalanceAfter;
             }
 
             require(
@@ -489,6 +493,12 @@ contract OrderBookHelper is IOrderBookHelper {
             LimitOrder memory bestAsk;
             // in -> token 1
             // out -> token 0
+            data.token0BalanceBefore = orderBook.token0().balanceOf(
+                address(this)
+            );
+            data.token1BalanceBefore = orderBook.token1().balanceOf(
+                address(this)
+            );
             while (data.remainingAmountOut > 0) {
                 try router.getBestAsk(orderBookId) returns (
                     LimitOrder memory order
@@ -497,13 +507,6 @@ contract OrderBookHelper is IOrderBookHelper {
                 } catch {
                     break;
                 }
-
-                data.token0BalanceBefore = orderBook.token0().balanceOf(
-                    address(this)
-                );
-                data.token1BalanceBefore = orderBook.token1().balanceOf(
-                    address(this)
-                );
 
                 data.priceBase =
                     (bestAsk.amount1 * orderBook.sizeTick()) /
@@ -542,6 +545,9 @@ contract OrderBookHelper is IOrderBookHelper {
                 data.amountIn +=
                     data.token1BalanceBefore -
                     data.token1BalanceAfter;
+
+                data.token0BalanceBefore = data.token0BalanceAfter;
+                data.token1BalanceBefore = data.token1BalanceAfter;
             }
 
             require(data.remainingAmountOut == 0, "Not enough liquidity");
