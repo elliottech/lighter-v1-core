@@ -5,6 +5,10 @@ pragma solidity 0.8.16;
 /// @notice Helper contracts provides view functions for Lighter users
 /// to fetch and compute swap and book information
 interface IOrderBookHelper {
+    /// @notice approveRouter approves the router to spend the given token, only owner can call
+    /// @param token The token to approve
+    function approveRouter(address token) external;
+
     /// @notice Returns the details for all existing order books
     /// @return orderBookIds The id of the order book
     /// @return orderBookAddresses The address of the order book
