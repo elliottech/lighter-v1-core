@@ -401,9 +401,8 @@ describe("OrderBook contract, market orders", function () {
       );
     });
 
-    it("swapExactInput test by selling token0 and refunding not filled amountIn", async function () {
-      const { router, orderBookHelper, acc1, token1 } =
-        await get_setup_values();
+    it("swapExactInput test by selling token0 and reverting because of not enough loquidity", async function () {
+      const { router, orderBookHelper, acc1 } = await get_setup_values();
 
       // Create 5 bid limit orders
       await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // amount0 = 100, amount1 = 1
@@ -413,14 +412,9 @@ describe("OrderBook contract, market orders", function () {
       await router.connect(acc1).createLimitOrder(0, 1, 1, 0, 0); // amount0 = 100, amount1 = 1
 
       // Create market order to fill first three asks
-      await orderBookHelper.connect(acc1).swapExactInput(0, 1, 600, 5);
-      let order_ids = await router.getLimitOrders(0);
-
-      expect(order_ids[0].length).to.equal(0);
-      // test the token0 balance in order helper should be 0
-      expect(
-        await token1.connect(acc1).balanceOf(orderBookHelper.address)
-      ).to.equal(0);
+      await expect(
+        orderBookHelper.connect(acc1).swapExactInput(0, 1, 600, 5)
+      ).to.be.revertedWith("Not enough liquidity");
     });
 
     it("swapExactInput test by selling token0, even if size tick is wrong", async function () {
@@ -471,7 +465,7 @@ describe("OrderBook contract, market orders", function () {
       // Create market order to fill first three asks
       await expect(
         orderBookHelper.connect(acc1).swapExactInput(0, 1, 300, 6)
-      ).to.be.revertedWith("Slippage is too high or not enough liquidty");
+      ).to.be.revertedWith("Slippage is too high");
     });
   });
 
@@ -535,23 +529,9 @@ describe("OrderBook contract, market orders", function () {
       await router.connect(acc1).createLimitOrder(0, 1, 1, 1, 0); // amount0 = 100, amount1 = 1
 
       // Create market order to fill first three bids
-      await orderBookHelper.connect(acc1).swapExactInput(0, 0, 5, 300);
-
-      expect(
-        await token0.connect(acc1).balanceOf(orderBookHelper.address)
-      ).to.equal(0);
-
-      expect(
-        await token1.connect(acc1).balanceOf(orderBookHelper.address)
-      ).to.equal(0);
-
-      expect(await token0.connect(acc1).balanceOf(acc1.address)).to.equal(
-        initialAcc1Token0Balance
-      );
-
-      expect(await token1.connect(acc1).balanceOf(acc1.address)).to.equal(
-        initialAcc1Token1Balance
-      );
+      await expect(
+        orderBookHelper.connect(acc1).swapExactInput(0, 0, 5, 300)
+      ).to.be.revertedWith("Not enough liquidity");
     });
 
     it("swapExactInput test by selling token1, input amount is less than the book", async function () {
@@ -632,7 +612,7 @@ describe("OrderBook contract, market orders", function () {
 
       await expect(
         orderBookHelper.connect(acc1).swapExactInput(0, 0, 20, 1000)
-      ).to.be.revertedWith("Slippage is too high or not enough liquidty");
+      ).to.be.revertedWith("Slippage is too high");
     });
   });
 
@@ -940,7 +920,7 @@ describe("OrderBook contract, market orders", function () {
     it("swapExactOutput test by selling token1, not enough amount out", async function () {
       const { router, orderBookHelper, acc1 } = await get_setup_values();
 
-      // Create 5 ask limit orders
+      // Create 2 ask limit orders
       await router.connect(acc1).createLimitOrder(0, 5, 1, 1, 0); // amount0 = 500, amount1 = 5
       await router.connect(acc1).createLimitOrder(0, 5, 4, 1, 0); // amount0 = 500, amount1 = 20
 
